@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS settings (
 
 CREATE TABLE IF NOT EXISTS leads (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    source TEXT NOT NULL DEFAULT 'manual',        -- reddit | hackernews | manual
+    source TEXT NOT NULL DEFAULT 'manual',        -- reddit | hackernews | osm | google | manual
     source_url TEXT UNIQUE,
     title TEXT NOT NULL,
     snippet TEXT DEFAULT '',
@@ -25,7 +25,13 @@ CREATE TABLE IF NOT EXISTS leads (
     status TEXT NOT NULL DEFAULT 'new',           -- new | contacted | responded | customer | archived
     notes TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now')),
-    contacted_at TEXT
+    contacted_at TEXT,
+    kind TEXT NOT NULL DEFAULT 'person',          -- person (course leads) | business (agency clients)
+    phone TEXT DEFAULT '',
+    website TEXT DEFAULT '',
+    city TEXT DEFAULT '',
+    vertical TEXT DEFAULT '',                     -- hvac | plumber | roofer | ...
+    meta TEXT DEFAULT '{}'                        -- JSON: rating, review_count, hours, score_reasons…
 );
 
 CREATE TABLE IF NOT EXISTS outreach (
@@ -80,16 +86,57 @@ DEFAULT_PROFILE = {
     ],
 }
 
+# Agency mode: Colibri Code sells AI receptionists to home service businesses.
+# Seeded from the sales materials in the AImoney course repo — edit in Settings.
+DEFAULT_AGENCY_PROFILE = {
+    "agency_name": "Colibri Code LLC",
+    "website": "",
+    "service": (
+        "AI phone agent for home service businesses — answers calls 24/7, "
+        "sounds like a real person, books appointments straight onto the "
+        "calendar, and texts the owner the details. Bilingual English + Spanish."
+    ),
+    "pricing": "$300–500/month — about the cost of one missed job; usually pays for itself in the first week",
+    "founders": "Mike (technical founder) & Paola (operations/sales)",
+    "tone": (
+        "confident, plain-spoken, value-first — set a time expectation up front, "
+        "agitate the missed-call pain with vivid trade language (on a ladder, "
+        "under a house, after hours), never hard-sell"
+    ),
+    "verticals": ["hvac", "plumber", "roofer", "electrician"],
+    "cities": ["Austin, TX", "San Antonio, TX"],
+}
+
+# Columns added after the first release — applied to existing databases on boot.
+_LEAD_MIGRATIONS = {
+    "kind": "TEXT NOT NULL DEFAULT 'person'",
+    "phone": "TEXT DEFAULT ''",
+    "website": "TEXT DEFAULT ''",
+    "city": "TEXT DEFAULT ''",
+    "vertical": "TEXT DEFAULT ''",
+    "meta": "TEXT DEFAULT '{}'",
+}
+
 
 def init_db():
     os.makedirs(DATA_DIR, exist_ok=True)
     with get_db() as db:
         db.executescript(SCHEMA)
+        existing = {r["name"] for r in db.execute("PRAGMA table_info(leads)")}
+        for col, decl in _LEAD_MIGRATIONS.items():
+            if col not in existing:
+                db.execute(f"ALTER TABLE leads ADD COLUMN {col} {decl}")
         cur = db.execute("SELECT value FROM settings WHERE key = 'profile'")
         if cur.fetchone() is None:
             db.execute(
                 "INSERT INTO settings (key, value) VALUES ('profile', ?)",
                 (json.dumps(DEFAULT_PROFILE),),
+            )
+        cur = db.execute("SELECT value FROM settings WHERE key = 'agency_profile'")
+        if cur.fetchone() is None:
+            db.execute(
+                "INSERT INTO settings (key, value) VALUES ('agency_profile', ?)",
+                (json.dumps(DEFAULT_AGENCY_PROFILE),),
             )
 
 
@@ -115,6 +162,21 @@ def save_profile(profile: dict):
     with get_db() as db:
         db.execute(
             "INSERT INTO settings (key, value) VALUES ('profile', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (json.dumps(profile),),
+        )
+
+
+def get_agency_profile() -> dict:
+    with get_db() as db:
+        row = db.execute("SELECT value FROM settings WHERE key = 'agency_profile'").fetchone()
+        return json.loads(row["value"]) if row else dict(DEFAULT_AGENCY_PROFILE)
+
+
+def save_agency_profile(profile: dict):
+    with get_db() as db:
+        db.execute(
+            "INSERT INTO settings (key, value) VALUES ('agency_profile', ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (json.dumps(profile),),
         )

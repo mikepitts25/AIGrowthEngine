@@ -58,7 +58,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 function show(view) {
   currentView = view;
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
-  ({ dashboard: renderDashboard, discover: renderDiscover, leads: renderLeads, content: renderContent, settings: renderSettings }[view])();
+  ({ dashboard: renderDashboard, discover: renderDiscover, agency: renderAgency, leads: renderLeads, content: renderContent, settings: renderSettings }[view])();
 }
 
 async function refreshAiBadge() {
@@ -151,13 +151,74 @@ async function renderDiscover() {
   });
 }
 
+// ------------------------------------------------------------ agency clients
+
+const VERTICAL_LABELS = {
+  hvac: 'HVAC', plumber: 'Plumbing', roofer: 'Roofing',
+  electrician: 'Electrical', landscaping: 'Landscaping', cleaning: 'Cleaning',
+};
+
+async function renderAgency() {
+  const { agency, google_places_enabled } = await api('/api/settings');
+  root.innerHTML = `
+    <h2 class="text-2xl font-bold mb-2">Agency Clients</h2>
+    <p class="text-slate-500 mb-6 text-sm">Find local home-service businesses that need <b>${esc(agency.agency_name || 'your agency')}</b>'s AI receptionist — scored for missed-call pain (no website, no evening/weekend hours, small review footprint). Then draft the cold email, SMS, or a call prep sheet.</p>
+    <div class="bg-white rounded-xl shadow-sm p-5 mb-6">
+      <label class="block text-sm font-medium mb-1">Target cities <span class="text-slate-400 font-normal">(one per line — defaults from Settings)</span></label>
+      <textarea id="ag-cities" rows="3" class="w-full border rounded-lg px-3 py-2 text-sm">${esc((agency.cities || []).join('\n'))}</textarea>
+      <label class="block text-sm font-medium mt-3 mb-1.5">Trades</label>
+      <div class="flex flex-wrap gap-3">
+        ${Object.entries(VERTICAL_LABELS).map(([k, v]) => `
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" class="ag-vertical rounded" value="${k}" ${(agency.verticals || []).includes(k) ? 'checked' : ''}> ${v}</label>`).join('')}
+      </div>
+      <div class="flex flex-wrap items-center gap-4 mt-4">
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="ag-src-osm" checked class="rounded"> OpenStreetMap <span class="text-slate-400">(free)</span></label>
+        <label class="flex items-center gap-2 text-sm ${google_places_enabled ? '' : 'opacity-50'}">
+          <input type="checkbox" id="ag-src-google" ${google_places_enabled ? 'checked' : 'disabled'} class="rounded"> Google Places
+          ${google_places_enabled ? '' : '<span class="text-slate-400">(set GOOGLE_PLACES_API_KEY)</span>'}</label>
+        <label class="flex items-center gap-2 text-sm">Min score <input type="number" id="ag-min-score" value="30" min="0" max="100" class="w-16 border rounded px-2 py-1"></label>
+        <button id="run-agency" class="ml-auto bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">🏢 Find businesses</button>
+      </div>
+    </div>
+    <div id="agency-result"></div>`;
+
+  document.getElementById('run-agency').addEventListener('click', async (e) => {
+    const btn = e.target;
+    btn.disabled = true; btn.textContent = 'Searching… (can take ~60s)';
+    const out = document.getElementById('agency-result');
+    out.innerHTML = '<p class="text-slate-500 text-sm">Geocoding cities and scanning business registries…</p>';
+    try {
+      const cities = document.getElementById('ag-cities').value.split('\n').map(s => s.trim()).filter(Boolean);
+      const verticals = [...document.querySelectorAll('.ag-vertical:checked')].map(c => c.value);
+      const sources = [];
+      if (document.getElementById('ag-src-osm').checked) sources.push('osm');
+      if (document.getElementById('ag-src-google').checked) sources.push('google');
+      const r = await api('/api/agency/discover', { method: 'POST', body: { cities, verticals, sources, min_score: +document.getElementById('ag-min-score').value } });
+      out.innerHTML = `<div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm">
+        ✅ Found <b>${r.found}</b> businesses (via ${r.sources_used.join(' + ')}), added <b>${r.added}</b> new prospects.
+        <button class="text-emerald-700 underline ml-1" onclick="renderLeads('', 'business')">Review them →</button></div>`;
+    } catch (err) {
+      out.innerHTML = `<div class="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">${esc(err.message)}</div>`;
+    } finally {
+      btn.disabled = false; btn.textContent = '🏢 Find businesses';
+    }
+  });
+}
+
 // ------------------------------------------------------------ leads
 
-async function renderLeads(filter = '') {
-  const leads = await api('/api/leads' + (filter ? `?status=${filter}` : ''));
+async function renderLeads(filter = '', kind = '') {
+  const params = new URLSearchParams();
+  if (filter) params.set('status', filter);
+  if (kind) params.set('kind', kind);
+  const qs = params.toString();
+  const leads = await api('/api/leads' + (qs ? `?${qs}` : ''));
   const tabs = ['', ...LEAD_STATUSES].map(s => `
     <button class="px-3 py-1.5 rounded-full text-xs font-medium ${s === filter ? 'bg-slate-900 text-white' : 'bg-white hover:bg-slate-200'}"
-      onclick="renderLeads('${s}')">${s || 'all'}</button>`).join('');
+      onclick="renderLeads('${s}', '${kind}')">${s || 'all'}</button>`).join('');
+  const kindTabs = [['', 'All'], ['person', '👤 Course leads'], ['business', '🏢 Agency clients']].map(([k, label]) => `
+    <button class="px-3 py-1.5 rounded-full text-xs font-medium ${k === kind ? 'bg-emerald-600 text-white' : 'bg-white hover:bg-slate-200'}"
+      onclick="renderLeads('${filter}', '${k}')">${label}</button>`).join('');
 
   root.innerHTML = `
     <div class="flex items-center justify-between mb-4">
@@ -167,6 +228,7 @@ async function renderLeads(filter = '') {
         <button id="add-lead" class="bg-slate-900 text-white px-3 py-1.5 rounded-lg text-sm">+ Add manually</button>
       </div>
     </div>
+    <div class="flex gap-2 mb-2 flex-wrap">${kindTabs}</div>
     <div class="flex gap-2 mb-4 flex-wrap">${tabs}</div>
     <div id="lead-list" class="space-y-3"></div>
     <div id="lead-form" class="hidden"></div>`;
@@ -209,12 +271,30 @@ async function renderLeads(filter = '') {
         snippet: '',
       }});
       toast('Lead added');
-      renderLeads(filter);
+      renderLeads(filter, kind);
     });
   });
 }
 
 function leadCard(l) {
+  const isBiz = l.kind === 'business';
+  let meta = {};
+  try { meta = JSON.parse(l.meta || '{}'); } catch {}
+  const reasons = meta.score_reasons || [];
+  const bizChips = isBiz ? `
+    <div class="flex flex-wrap gap-1.5 mt-1.5">
+      ${l.vertical ? `<span class="px-2 py-0.5 rounded-full text-xs bg-indigo-100 text-indigo-800">${esc(VERTICAL_LABELS[l.vertical] || l.vertical)}</span>` : ''}
+      ${l.phone ? `<span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700">📞 ${esc(l.phone)}</span>` : ''}
+      ${l.website ? `<a href="${esc(l.website)}" target="_blank" class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700 hover:bg-slate-200">🌐 site</a>`
+                  : '<span class="px-2 py-0.5 rounded-full text-xs bg-rose-100 text-rose-700">no website</span>'}
+      ${meta.rating ? `<span class="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-800">⭐ ${meta.rating} (${meta.review_count ?? '?'})</span>` : ''}
+    </div>
+    ${reasons.length ? `<p class="text-xs text-slate-500 mt-1.5">🎯 ${reasons.map(esc).join(' · ')}</p>` : ''}` : '';
+  const draftBtns = isBiz ? `
+      <button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded-lg" data-id="${l.id}" data-channel="email">✉️ Email</button>
+      <button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded-lg" data-id="${l.id}" data-channel="sms">💬 SMS</button>
+      <button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded-lg" data-id="${l.id}" data-channel="callprep">📞 Call prep</button>`
+    : `<button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg" data-id="${l.id}">✨ Draft outreach</button>`;
   return `
   <div class="bg-white rounded-xl shadow-sm p-4" id="lead-${l.id}">
     <div class="flex items-start gap-3">
@@ -226,6 +306,7 @@ function leadCard(l) {
           <span class="px-2 py-0.5 rounded-full text-xs ${STATUS_COLORS[l.status] || ''}">${l.status}</span>
         </div>
         <p class="text-xs text-slate-500 mt-0.5">${esc(l.community)}${l.author ? ' · ' + esc(l.author) : ''} · via ${esc(l.source)}</p>
+        ${bizChips}
         ${l.snippet ? `<p class="text-xs text-slate-600 mt-1.5 line-clamp-2">${esc(l.snippet)}</p>` : ''}
         ${l.notes ? `<p class="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 mt-1.5">📝 ${esc(l.notes)}</p>` : ''}
       </div>
@@ -233,8 +314,8 @@ function leadCard(l) {
         <select class="lead-status border rounded-lg px-2 py-1 text-xs" data-id="${l.id}">
           ${LEAD_STATUSES.map(s => `<option value="${s}" ${s === l.status ? 'selected' : ''}>${s}</option>`).join('')}
         </select>
-        <div class="flex gap-1">
-          <button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg" data-id="${l.id}">✨ Draft outreach</button>
+        <div class="flex gap-1 flex-wrap justify-end">
+          ${draftBtns}
           <button class="del-btn text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg" data-id="${l.id}">🗑</button>
         </div>
       </div>
@@ -254,21 +335,22 @@ function wireLeadCard(l) {
     await api(`/api/leads/${l.id}`, { method: 'DELETE' });
     card.remove();
   });
-  card.querySelector('.draft-btn').addEventListener('click', async (e) => {
+  card.querySelectorAll('.draft-btn').forEach(btn => btn.addEventListener('click', async (e) => {
     const area = card.querySelector('.outreach-area');
     area.classList.remove('hidden');
     area.innerHTML = '<p class="text-xs text-slate-500">✨ Drafting personalized outreach…</p>';
     e.target.disabled = true;
     try {
-      const channel = l.source === 'manual' ? 'dm' : 'comment';
+      const channel = e.target.dataset.channel || (l.source === 'manual' ? 'dm' : 'comment');
       const d = await api(`/api/leads/${l.id}/draft`, { method: 'POST', body: { channel } });
+      const rows = channel === 'callprep' ? 16 : channel === 'sms' ? 3 : 8;
       area.innerHTML = `
         <div class="bg-slate-50 border rounded-lg p-3">
           <div class="flex items-center justify-between mb-2">
             <span class="text-xs font-semibold text-slate-500">Draft ${channel} ${d.generated_by === 'ai' ? '· 🤖 Claude' : '· 📋 template'}</span>
             <button class="text-xs text-emerald-600 hover:underline copy-draft">Copy</button>
           </div>
-          <textarea rows="6" class="w-full text-sm border rounded-lg px-3 py-2 draft-text">${esc(d.content)}</textarea>
+          <textarea rows="${rows}" class="w-full text-sm border rounded-lg px-3 py-2 draft-text ${channel === 'callprep' ? 'font-mono text-xs' : ''}">${esc(d.content)}</textarea>
           <p class="text-[11px] text-slate-400 mt-1.5">Review, personalize, and send it yourself — authentic beats automated. Sending marks the lead as contacted.</p>
           <button class="mt-1 text-xs bg-slate-900 text-white px-3 py-1.5 rounded-lg mark-contacted">✓ I sent it — mark contacted</button>
         </div>`;
@@ -283,7 +365,7 @@ function wireLeadCard(l) {
     } finally {
       e.target.disabled = false;
     }
-  });
+  }));
 }
 
 // ------------------------------------------------------------ content
@@ -374,7 +456,7 @@ function wirePostCard(p) {
 // ------------------------------------------------------------ settings
 
 async function renderSettings() {
-  const { profile, ai_enabled } = await api('/api/settings');
+  const { profile, agency, ai_enabled } = await api('/api/settings');
   root.innerHTML = `
     <h2 class="text-2xl font-bold mb-2">Settings</h2>
     <p class="text-slate-500 mb-6 text-sm">This business profile powers lead scoring, outreach drafting, and content generation.</p>
@@ -391,6 +473,26 @@ async function renderSettings() {
         <textarea id="pf-subreddits" rows="4" class="w-full border rounded-lg px-3 py-2 text-sm">${esc((profile.subreddits || []).join('\n'))}</textarea></div>
       <button id="save-profile" class="bg-slate-900 text-white px-5 py-2 rounded-lg text-sm font-semibold">Save profile</button>
     </div>
+
+    <h3 class="text-lg font-bold mt-8 mb-2">🏢 Agency profile</h3>
+    <p class="text-slate-500 mb-4 text-sm">Powers Agency Clients discovery and cold outreach drafting (email, SMS, call prep).</p>
+    <div class="bg-white rounded-xl shadow-sm p-5 space-y-4 max-w-2xl">
+      ${[['agency_name', 'Agency name'], ['website', 'Website'], ['founders', 'Founders / who calls'], ['pricing', 'Pricing (as said on a call)']].map(([k, label]) => `
+        <div><label class="block text-sm font-medium mb-1">${label}</label>
+        <input id="ag-${k}" class="w-full border rounded-lg px-3 py-2 text-sm" value="${esc(agency[k] || '')}"></div>`).join('')}
+      ${[['service', 'What you sell (one plain sentence)'], ['tone', 'Voice & tone']].map(([k, label]) => `
+        <div><label class="block text-sm font-medium mb-1">${label}</label>
+        <textarea id="ag-${k}" rows="2" class="w-full border rounded-lg px-3 py-2 text-sm">${esc(agency[k] || '')}</textarea></div>`).join('')}
+      <div><label class="block text-sm font-medium mb-1">Target cities <span class="text-slate-400 font-normal">(one per line, e.g. "Austin, TX")</span></label>
+        <textarea id="ag-cities-set" rows="3" class="w-full border rounded-lg px-3 py-2 text-sm">${esc((agency.cities || []).join('\n'))}</textarea></div>
+      <div><label class="block text-sm font-medium mb-1.5">Trades to target</label>
+        <div class="flex flex-wrap gap-3">
+          ${Object.entries(VERTICAL_LABELS).map(([k, v]) => `
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" class="ag-vertical-set rounded" value="${k}" ${(agency.verticals || []).includes(k) ? 'checked' : ''}> ${v}</label>`).join('')}
+        </div></div>
+      <button id="save-agency" class="bg-slate-900 text-white px-5 py-2 rounded-lg text-sm font-semibold">Save agency profile</button>
+    </div>
+
     <div class="bg-white rounded-xl shadow-sm p-5 mt-6 max-w-2xl text-sm">
       <h3 class="font-semibold mb-2">🤖 AI status</h3>
       ${ai_enabled
@@ -410,6 +512,20 @@ async function renderSettings() {
       subreddits: lines('pf-subreddits'),
     }});
     toast('Profile saved');
+  });
+
+  document.getElementById('save-agency').addEventListener('click', async () => {
+    await api('/api/settings/agency', { method: 'PUT', body: {
+      agency_name: document.getElementById('ag-agency_name').value,
+      website: document.getElementById('ag-website').value,
+      founders: document.getElementById('ag-founders').value,
+      pricing: document.getElementById('ag-pricing').value,
+      service: document.getElementById('ag-service').value,
+      tone: document.getElementById('ag-tone').value,
+      cities: document.getElementById('ag-cities-set').value.split('\n').map(s => s.trim()).filter(Boolean),
+      verticals: [...document.querySelectorAll('.ag-vertical-set:checked')].map(c => c.value),
+    }});
+    toast('Agency profile saved');
   });
 }
 

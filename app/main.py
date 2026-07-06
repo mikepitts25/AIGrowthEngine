@@ -4,6 +4,7 @@ Run with:  uvicorn app.main:app --reload
 """
 import csv
 import io
+import json
 import os
 
 from fastapi import FastAPI, HTTPException
@@ -11,8 +12,11 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import ai, lead_finder
-from .database import get_db, get_profile, init_db, save_profile
+from . import ai, business_finder, lead_finder
+from .database import (
+    get_agency_profile, get_db, get_profile, init_db,
+    save_agency_profile, save_profile,
+)
 
 app = FastAPI(title="AIGrowthEngine")
 
@@ -42,6 +46,24 @@ class DiscoverIn(BaseModel):
     min_score: int = 20
 
 
+class AgencyProfileIn(BaseModel):
+    agency_name: str = ""
+    website: str = ""
+    service: str = ""
+    pricing: str = ""
+    founders: str = ""
+    tone: str = ""
+    verticals: list[str] = []
+    cities: list[str] = []
+
+
+class AgencyDiscoverIn(BaseModel):
+    sources: list[str] = ["osm", "google"]
+    cities: list[str] | None = None      # default: agency profile cities
+    verticals: list[str] | None = None   # default: agency profile verticals
+    min_score: int = 20
+
+
 class LeadIn(BaseModel):
     title: str
     snippet: str = ""
@@ -57,7 +79,7 @@ class LeadPatch(BaseModel):
 
 
 class DraftIn(BaseModel):
-    channel: str = "comment"  # comment | dm | email
+    channel: str = "comment"  # person: comment | dm | email — business: email | sms | callprep
 
 
 class GenerateIn(BaseModel):
@@ -103,12 +125,23 @@ def dashboard():
 
 @app.get("/api/settings")
 def read_settings():
-    return {"profile": get_profile(), "ai_enabled": ai.ai_available()}
+    return {
+        "profile": get_profile(),
+        "agency": get_agency_profile(),
+        "ai_enabled": ai.ai_available(),
+        "google_places_enabled": business_finder.google_places_enabled(),
+    }
 
 
 @app.put("/api/settings")
 def write_settings(profile: ProfileIn):
     save_profile(profile.model_dump())
+    return {"ok": True}
+
+
+@app.put("/api/settings/agency")
+def write_agency_settings(profile: AgencyProfileIn):
+    save_agency_profile(profile.model_dump())
     return {"ok": True}
 
 
@@ -135,13 +168,49 @@ def discover_leads(body: DiscoverIn):
     return {"found": len(found), "added": added}
 
 
+@app.post("/api/agency/discover")
+def discover_businesses(body: AgencyDiscoverIn):
+    agency = get_agency_profile()
+    cities = body.cities or agency.get("cities", [])
+    verticals = body.verticals or agency.get("verticals", [])
+    if not cities:
+        raise HTTPException(400, "No target cities configured — add some in Settings first.")
+    if not verticals:
+        raise HTTPException(400, "No verticals configured — add some in Settings first.")
+    sources = body.sources
+    if "google" in sources and not business_finder.google_places_enabled():
+        sources = [s for s in sources if s != "google"]
+    if not sources:
+        raise HTTPException(400, "No available sources (set GOOGLE_PLACES_API_KEY to enable Google).")
+
+    found = business_finder.discover(cities, verticals, sources)
+    found = [f for f in found if f["intent_score"] >= body.min_score]
+
+    added = 0
+    with get_db() as db:
+        for biz in found:
+            row = {**biz, "meta": json.dumps(biz["meta"])}
+            cur = db.execute(
+                "INSERT OR IGNORE INTO leads (source, source_url, title, snippet, author, community, "
+                " intent_score, kind, phone, website, city, vertical, meta) "
+                "VALUES (:source, :source_url, :title, :snippet, :author, :community, "
+                " :intent_score, :kind, :phone, :website, :city, :vertical, :meta)",
+                row,
+            )
+            added += cur.rowcount
+    return {"found": len(found), "added": added, "sources_used": sources}
+
+
 @app.get("/api/leads")
-def list_leads(status: str | None = None, q: str | None = None):
+def list_leads(status: str | None = None, q: str | None = None, kind: str | None = None):
     sql = "SELECT * FROM leads WHERE 1=1"
     params: list = []
     if status:
         sql += " AND status = ?"
         params.append(status)
+    if kind:
+        sql += " AND kind = ?"
+        params.append(kind)
     if q:
         sql += " AND (title LIKE ? OR snippet LIKE ? OR community LIKE ?)"
         params += [f"%{q}%"] * 3
@@ -216,7 +285,10 @@ def draft_for_lead(lead_id: int, body: DraftIn):
         if row is None:
             raise HTTPException(404, "Lead not found")
         lead = dict(row)
-    content, generated_by = ai.draft_outreach(get_profile(), lead, body.channel)
+    if lead.get("kind") == "business":
+        content, generated_by = ai.draft_agency_outreach(get_agency_profile(), lead, body.channel)
+    else:
+        content, generated_by = ai.draft_outreach(get_profile(), lead, body.channel)
     with get_db() as db:
         cur = db.execute(
             "INSERT INTO outreach (lead_id, channel, content, generated_by) VALUES (?, ?, ?, ?)",
