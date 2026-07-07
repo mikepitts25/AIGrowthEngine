@@ -38,8 +38,25 @@ _geocode_cache: dict[str, dict | None] = {}
 _SUPPLY_RE = re.compile(r"\b(supply|supplies|wholesale|distribut\w*|showroom)\b", re.IGNORECASE)
 
 
+YELP_URL = "https://api.yelp.com/v3/businesses/search"
+
+# Yelp category aliases per vertical
+YELP_CATEGORIES = {
+    "hvac": "hvac",
+    "plumber": "plumbing",
+    "roofer": "roofing",
+    "electrician": "electricians",
+    "landscaping": "landscaping",
+    "cleaning": "homecleaning",
+}
+
+
 def google_places_enabled() -> bool:
     return bool(os.environ.get("GOOGLE_PLACES_API_KEY"))
+
+
+def yelp_enabled() -> bool:
+    return bool(os.environ.get("YELP_API_KEY"))
 
 
 # ---------------------------------------------------------------- scoring
@@ -254,6 +271,69 @@ def search_google(city: str, verticals: list[str], limit: int = 20) -> list[dict
     return results
 
 
+# ---------------------------------------------------------------- Yelp
+
+def search_yelp(city: str, verticals: list[str], limit: int = 20) -> list[dict]:
+    """Yelp Fusion search — needs YELP_API_KEY (free tier is plenty)."""
+    api_key = os.environ.get("YELP_API_KEY")
+    if not api_key:
+        return []
+    results = []
+    with httpx.Client(timeout=20, headers={"Authorization": f"Bearer {api_key}"}) as client:
+        for v in verticals:
+            cat = YELP_CATEGORIES.get(v)
+            if not cat:
+                continue
+            try:
+                resp = client.get(YELP_URL, params={
+                    "categories": cat, "location": city, "limit": limit,
+                    "sort_by": "review_count",
+                })
+                resp.raise_for_status()
+                businesses = resp.json().get("businesses", [])
+            except httpx.HTTPError:
+                continue
+            for b in businesses:
+                name, url = b.get("name", ""), b.get("url", "").split("?")[0]
+                if not name or not url or b.get("is_closed"):
+                    continue
+                phone = b.get("display_phone") or b.get("phone") or ""
+                rating = b.get("rating")
+                review_count = b.get("review_count")
+                # Yelp search results omit website/hours — those are unknown here,
+                # not absent, so score only what we actually know.
+                score, reasons = 0, []
+                if phone:
+                    score += 20
+                    reasons.append("phone listed — cold-callable")
+                if review_count is not None and 3 <= review_count <= 100:
+                    score += 15
+                    reasons.append(f"established but small ({review_count} reviews) — owner still answers the phone")
+                if rating is not None and rating >= 4.0:
+                    score += 5
+                    reasons.append(f"good reputation ({rating}★) — busy enough to miss calls")
+                addr = ", ".join((b.get("location") or {}).get("display_address", []))
+                results.append({
+                    "source": "yelp",
+                    "source_url": url,
+                    "title": name[:300],
+                    "snippet": " · ".join(filter(None, [
+                        addr, f"{rating}★ ({review_count} reviews)" if rating else "",
+                    ]))[:400],
+                    "author": "",
+                    "community": city,
+                    "kind": "business",
+                    "phone": phone,
+                    "website": "",
+                    "city": city,
+                    "vertical": v,
+                    "intent_score": score,
+                    "meta": {"rating": rating, "review_count": review_count,
+                             "address": addr, "score_reasons": reasons},
+                })
+    return results
+
+
 # ---------------------------------------------------------------- entry point
 
 def discover(cities: list[str], verticals: list[str], sources: list[str]) -> list[dict]:
@@ -265,6 +345,8 @@ def discover(cities: list[str], verticals: list[str], sources: list[str]) -> lis
             found += search_osm(city, verticals)
         if "google" in sources:
             found += search_google(city, verticals)
+        if "yelp" in sources:
+            found += search_yelp(city, verticals)
         for biz in found:
             url = biz["source_url"]
             if url not in seen or biz["intent_score"] > seen[url]["intent_score"]:

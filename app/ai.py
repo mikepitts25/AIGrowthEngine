@@ -73,6 +73,58 @@ def draft_outreach(profile: dict, lead: dict, channel: str) -> tuple[str, str]:
 
 # ---------------------------------------------------------------- agency outreach
 
+QUALIFY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "fit_score": {"type": "integer"},
+        "rationale": {"type": "string"},
+        "opener_angle": {"type": "string"},
+    },
+    "required": ["fit_score", "rationale", "opener_angle"],
+    "additionalProperties": False,
+}
+
+
+def qualify_lead(agency_profile: dict, lead: dict) -> dict | None:
+    """AI fit-scoring: 0-100 fit for the agency's service, a one-line
+    rationale, and the sharpest opener angle. None if AI is unavailable
+    or the call fails."""
+    gaps = _lead_gaps(lead)
+    text = llm.complete(
+        system=(
+            "You qualify sales leads for a small AI agency. Score how good a fit "
+            "each business is for the service (0-100), where high fit = a real "
+            "service business likely losing revenue to missed calls with no modern "
+            "answering setup. Supply houses, wholesalers, franchises with call "
+            "centers, and non-service businesses are low fit. Be blunt.\n\n"
+            + _agency_context(agency_profile)
+        ),
+        user=(
+            "Qualify this lead.\n\n"
+            f"Business: {lead.get('title', '')}\n"
+            f"Trade: {lead.get('vertical', '')}\n"
+            f"City: {lead.get('city') or lead.get('community', '')}\n"
+            f"Phone: {lead.get('phone') or 'none listed'}\n"
+            f"Website: {lead.get('website') or 'NONE'}\n"
+            f"Email: {lead.get('email') or 'none found'}\n"
+            f"Details: {lead.get('snippet', '')}\n"
+            f"Signals: {'; '.join(gaps) or 'none'}"
+        ),
+        max_tokens=1024,
+        json_schema=QUALIFY_SCHEMA,
+    )
+    if not text:
+        return None
+    data = llm.parse_json_response(text)
+    if not data or "fit_score" not in data:
+        return None
+    try:
+        data["fit_score"] = max(0, min(100, int(data["fit_score"])))
+    except (TypeError, ValueError):
+        return None
+    return data
+
+
 AGENCY_CHANNEL_SPECS = {
     "email": (
         "a cold email: subject line on the first line as 'Subject: …', then a 90-130 word body. "
@@ -91,6 +143,14 @@ AGENCY_CHANNEL_SPECS = {
         "SOLUTION TEASER (AI answers 24/7, sounds human, books to calendar, texts the owner), "
         "LIKELY OBJECTIONS (3-4 with word-for-word responses: not interested / already have a "
         "receptionist / cost / don't trust AI), and CLOSE (two-option scheduling ask)"
+    ),
+    "sequence": (
+        "a 3-email follow-up sequence in plain text, clearly labeled 'EMAIL 1 — Day 0', "
+        "'EMAIL 2 — Day 3', 'EMAIL 3 — Day 7', each with its own Subject: line. "
+        "Email 1: pain + value + soft demo ask. Email 2: short, one new proof point "
+        "(e.g. a client picking up an extra job a week), restate the 15-min demo. "
+        "Email 3: brief and warm break-up email — 'sounds like the timing isn't right', "
+        "door stays open, one-line recap of value. Never guilt-trip"
     ),
 }
 
@@ -206,6 +266,37 @@ def draft_agency_outreach(profile: dict, lead: dict, channel: str) -> tuple[str,
             f"tell it's AI. If it doesn't sound right, you'll never hear from me again.\"\n\n"
             f"CLOSE: \"Would Tuesday or Thursday work better for a 15-minute demo?\""
         )
+    elif channel == "sequence":
+        first = founders.split("(")[0].strip() or "Mike"
+        content = (
+            f"EMAIL 1 — Day 0\n"
+            f"Subject: Quick question about missed calls at {business}\n\n"
+            f"Hi there,\n\n"
+            f"I work with {trade} companies in {city}, and the #1 thing I hear from owners is "
+            f"losing jobs to calls that come in mid-job or after hours — by the time they call "
+            f"back, that customer already booked someone else.{gap_line}\n\n"
+            f"We built an AI phone agent that answers 24/7, sounds like a real person, books the "
+            f"appointment onto your calendar, and texts you the details. {pricing}.\n\n"
+            f"Worth a 15-minute demo? I'll have the AI call you first so you can hear it yourself.\n\n"
+            f"{first}, {name}\n\n"
+            f"{'—' * 30}\n\n"
+            f"EMAIL 2 — Day 3\n"
+            f"Subject: The math on one missed call\n\n"
+            f"Hi again — quick one.\n\n"
+            f"One of our {trade} clients figured they were missing 5-8 calls a week. Even if only "
+            f"one of those was a real job, that's more than the service costs for the month.\n\n"
+            f"The demo takes 15 minutes and the AI calls YOU, so there's nothing to install or "
+            f"decide up front. Would this week or next work better?\n\n"
+            f"{first}, {name}\n\n"
+            f"{'—' * 30}\n\n"
+            f"EMAIL 3 — Day 7\n"
+            f"Subject: Closing the loop\n\n"
+            f"Hi — I'll take the silence as 'not right now', which is completely fine.\n\n"
+            f"If missed calls ever start stinging (busy season has a way of doing that), the demo "
+            f"offer stands: 15 minutes, the AI calls you, you decide. Either way, wishing you a "
+            f"packed schedule.\n\n"
+            f"{first}, {name}"
+        )
     else:  # email
         content = (
             f"Subject: Quick question about missed calls at {business}\n\n"
@@ -304,3 +395,170 @@ def generate_posts(profile: dict, topic: str, platforms: list[str]) -> list[dict
         {"platform": p, "content": templates.get(p, f"Thoughts on {topic}..."), "hashtags": "", "generated_by": "template"}
         for p in platforms
     ]
+
+
+# ---------------------------------------------------------------- course leads
+
+COURSE_QUALIFY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "fit_score": {"type": "integer"},
+        "rationale": {"type": "string"},
+        "opener_angle": {"type": "string"},
+    },
+    "required": ["fit_score", "rationale", "opener_angle"],
+    "additionalProperties": False,
+}
+
+
+def qualify_course_lead(profile: dict, lead: dict) -> dict | None:
+    """Score how good a fit a person is for the course (0-100), with a
+    rationale and the best angle for a genuinely helpful reply."""
+    text = llm.complete(
+        system=(
+            "You qualify inbound-style social leads for a digital course that teaches "
+            "people to make money with AI. High fit = someone genuinely trying to start "
+            "an AI side hustle or make money online, asking real questions, open to help. "
+            "Low fit = people already selling courses, bots, rage-bait, or off-topic posts. "
+            "Be blunt and practical.\n\n" + _profile_context(profile)
+        ),
+        user=(
+            "Qualify this person as a potential course buyer.\n\n"
+            f"Where they posted: {lead.get('community', '')}\n"
+            f"Author: {lead.get('author', '')}\n"
+            f"Post: {lead.get('title', '')}\n{lead.get('snippet', '')}"
+        ),
+        max_tokens=1024,
+        json_schema=COURSE_QUALIFY_SCHEMA,
+    )
+    if not text:
+        return None
+    data = llm.parse_json_response(text)
+    if not data or "fit_score" not in data:
+        return None
+    try:
+        data["fit_score"] = max(0, min(100, int(data["fit_score"])))
+    except (TypeError, ValueError):
+        return None
+    return data
+
+
+# ---------------------------------------------------------------- content calendar
+
+CALENDAR_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "posts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "day": {"type": "integer"},
+                    "platform": {"type": "string", "enum": list(PLATFORM_SPECS)},
+                    "topic": {"type": "string"},
+                    "content": {"type": "string"},
+                    "hashtags": {"type": "string"},
+                },
+                "required": ["day", "platform", "topic", "content", "hashtags"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["posts"],
+    "additionalProperties": False,
+}
+
+
+def generate_calendar(profile: dict, days: int = 7, platforms: list[str] | None = None) -> list[dict]:
+    """A ready-to-schedule week of content — one post per day, rotating
+    platforms, each on a distinct angle. Returns [{day, platform, topic,
+    content, hashtags, generated_by}]."""
+    platforms = platforms or ["x", "linkedin", "instagram"]
+    text = llm.complete(
+        system=(
+            "You are a social media strategist for a small business. Plan a content "
+            "calendar that builds trust and drives soft interest — value first, promotion "
+            "light. Vary the angle each day (tip, myth-buster, mini case study, question, "
+            "behind-the-scenes, quick win, invitation). No hype words or AI-slop phrasing.\n\n"
+            + _profile_context(profile)
+        ),
+        user=(
+            f"Plan {days} days of content, one post per day (day 1..{days}), rotating across "
+            f"these platforms: {', '.join(platforms)}. Each post: a distinct topic/angle, the "
+            f"finished post text, and hashtags where the platform uses them."
+        ),
+        max_tokens=4096,
+        json_schema=CALENDAR_SCHEMA,
+    )
+    if text:
+        data = llm.parse_json_response(text)
+        posts = (data or {}).get("posts", [])
+        wanted = [p for p in posts if isinstance(p, dict) and p.get("content") and p.get("platform") in platforms]
+        if wanted:
+            for p in wanted:
+                p["generated_by"] = "ai"
+                p.setdefault("hashtags", "")
+                p.setdefault("topic", "")
+            return wanted[:days]
+
+    # Template fallback — a solid evergreen week.
+    angles = [
+        ("x", "The one-tool rule", "Most people fail at AI income because they chase every new tool.\n\nPick ONE. Get genuinely good. Sell it this week. Then expand.\n\n#AI #SideHustle"),
+        ("linkedin", "How beginners earn their first $100 with AI",
+         "The gap between 'learning AI' and 'earning with AI' is one thing: finding someone who'll pay before you build.\n\n"
+         "Three steps that actually work:\n1. Pick a service AI speeds up (writing, images, automation)\n"
+         "2. Offer it to 10 real people this week\n3. Deliver fast, collect proof, raise your price\n\nWhat's stopped you from starting?"),
+        ("instagram", "Myth: you need to be technical",
+         "Myth: you need to code to make money with AI 🙅\n\nReality: the people winning are just good at ONE workflow they repeat.\n\n#AITools #SideHustle #MakeMoneyOnline #PassiveIncome #AIIncome"),
+        ("x", "Quick win", "A $0 AI side hustle you can start today:\n\nOffer to rewrite 5 local businesses' Google descriptions with AI. Charge $50 each once they see the before/after.\n\n#AI #SideHustle"),
+        ("linkedin", "Mini case study",
+         "A friend with zero tech background started offering AI-written product descriptions to Etsy sellers.\n\n"
+         "$30 a store, 2 stores a day, done in an evening. It's not glamorous — it's repeatable.\n\nRepeatable beats clever. What could you repeat?"),
+        ("instagram", "Behind the scenes",
+         "The 'secret' to AI income isn't a secret 👀\n\nIt's picking a boring problem people already pay to solve, and using AI to solve it faster.\n\n#AIIncome #SideHustle #MakeMoneyOnline #AITools #Entrepreneur"),
+        ("x", "Invitation", "I wrote out the exact beginner playbook for making your first income with AI — no fluff, no 'passive income' lies.\n\nHappy to share it, just ask.\n\n#AI #SideHustle"),
+    ]
+    name = profile.get("business_name", "")
+    out = []
+    for i in range(days):
+        platform, topic, content = angles[i % len(angles)]
+        out.append({"day": i + 1, "platform": platform, "topic": topic,
+                    "content": content, "hashtags": "", "generated_by": "template"})
+    return out
+
+
+TOPICS_SCHEMA = {
+    "type": "object",
+    "properties": {"topics": {"type": "array", "items": {"type": "string"}}},
+    "required": ["topics"],
+    "additionalProperties": False,
+}
+
+
+def suggest_topics(profile: dict, n: int = 8) -> list[str]:
+    """Fresh content-topic ideas tailored to the business."""
+    text = llm.complete(
+        system=(
+            "You brainstorm social content topics for a small business. Each topic is a "
+            "specific, scroll-stopping angle — not a generic category. Value-first.\n\n"
+            + _profile_context(profile)
+        ),
+        user=f"Give {n} content topic ideas, each a short specific hook.",
+        max_tokens=1024,
+        json_schema=TOPICS_SCHEMA,
+    )
+    if text:
+        data = llm.parse_json_response(text)
+        topics = [t for t in (data or {}).get("topics", []) if isinstance(t, str) and t.strip()]
+        if topics:
+            return topics[:n]
+    return [
+        "3 realistic ways beginners earn their first $100 with AI",
+        "The one AI tool I'd master first if I started over",
+        "Why 'passive income with AI' is mostly a lie (and what actually works)",
+        "A $0 AI side hustle you can start this weekend",
+        "How to find someone who'll pay before you build anything",
+        "AI freelancing: the services people actually pay for right now",
+        "Turning one skill into a repeatable AI-powered service",
+        "The boring AI money strategy nobody posts about",
+    ][:n]

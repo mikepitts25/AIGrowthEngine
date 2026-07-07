@@ -115,6 +115,18 @@ _LEAD_MIGRATIONS = {
     "city": "TEXT DEFAULT ''",
     "vertical": "TEXT DEFAULT ''",
     "meta": "TEXT DEFAULT '{}'",
+    "email": "TEXT DEFAULT ''",
+    "next_action": "TEXT DEFAULT ''",       # e.g. "follow-up email #2"
+    "next_action_at": "TEXT",               # ISO date the action is due
+}
+
+DEFAULT_AUTOPILOT = {
+    "enabled": False,
+    "interval_hours": 24,
+    "sources": ["osm", "google", "yelp"],   # unavailable sources are skipped
+    "enrich": True,                          # auto-enrich new business leads
+    "last_run": None,
+    "last_result": "",
 }
 
 
@@ -164,6 +176,27 @@ def save_profile(profile: dict):
             "INSERT INTO settings (key, value) VALUES ('profile', ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (json.dumps(profile),),
+        )
+
+
+def get_autopilot() -> dict:
+    with get_db() as db:
+        row = db.execute("SELECT value FROM settings WHERE key = 'autopilot'").fetchone()
+    cfg = dict(DEFAULT_AUTOPILOT)
+    if row:
+        try:
+            cfg.update(json.loads(row["value"]))
+        except json.JSONDecodeError:
+            pass
+    return cfg
+
+
+def save_autopilot(cfg: dict):
+    with get_db() as db:
+        db.execute(
+            "INSERT INTO settings (key, value) VALUES ('autopilot', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (json.dumps(cfg),),
         )
 
 

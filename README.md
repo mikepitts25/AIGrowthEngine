@@ -7,13 +7,26 @@ AI Income Blueprint project, but configurable for any business.
 
 ## What it does
 
+AIGrowthEngine drives **two income streams from one dashboard**:
+**course sales** (find people who want to make money with AI, grow your
+audience) and an **AI agency** (find local businesses that need an AI
+receptionist and pitch them). Ships pre-configured for the
+[AImoney](https://github.com/mikepitts25/AImoney) project and Colibri Code.
+
 | Feature | How it helps |
 |---|---|
-| 🔎 **Lead Finder** | Scans Reddit and Hacker News (free public APIs, no keys needed) for people actively asking about topics your business solves. Every result is scored 0–100 for buying intent. |
-| 👥 **Leads CRM** | A simple pipeline: `new → contacted → responded → customer`. Notes, filtering, and CSV export included. |
-| ✨ **Outreach Studio** | One click drafts a personalized, value-first reply or DM for any lead — AI-powered when a provider is configured, with solid templates as fallback. You review and send it yourself, keeping outreach authentic and within platform rules. |
-| ✍️ **Content Studio** | Turn one topic into platform-tailored posts for X/Twitter, LinkedIn, Reddit, and Instagram. Edit, copy, schedule reminders, and track draft → posted. |
-| ⚙️ **Business profile** | One profile (what you sell, who it's for, your tone, keywords) powers everything. Ships pre-configured for the AI Income Blueprint. |
+| 🔎 **Find Leads (course)** | Scans **Bluesky, Hacker News, and Reddit** for people asking about making money with AI. Bluesky and HN need no keys; Reddit uses OAuth when `REDDIT_CLIENT_ID`/`SECRET` are set. Scored 0–100 for buying intent. |
+| 🏢 **Agency Clients** | Finds local home-service businesses (HVAC, plumbing, roofing…) via **OpenStreetMap, Google Places, and Yelp**, scored for "missed-call pain" — the prospects your AI-receptionist service is built for. |
+| 🔬 **Lead enrichment** | Probes a business's website: pulls owner **email addresses**, detects online booking, flags dead sites — and re-scores pain automatically. |
+| 🧠 **AI qualification** | One click scores any lead's fit 0–100 with a rationale and the sharpest opener angle. |
+| ✨ **Outreach Studio** | Drafts personalized outreach — reply/DM for course leads; **email, SMS, call-prep sheet, or a full 3-email sequence** for agency leads. AI-powered with template fallback. You send it yourself. |
+| ⚡ **Bulk draft** | Draft outreach for the top 10 uncontacted leads in one click. |
+| 🖨 **Call sheet** | Printable daily dial list at `/callsheet` — phone, email, pain signals, opening script. |
+| ✍️ **Content Studio** | One topic → platform-tailored posts; **💡 topic ideas** and a **🗓 content calendar** that auto-schedules a whole week. |
+| ⏰ **Follow-up queue** | Next-action + due date per lead; the dashboard surfaces what's due today. |
+| 🛸 **Autopilot** | Background scheduler re-runs discovery + enrichment for both course and agency leads every N hours — hands-free pipeline. |
+| 📊 **Dashboard** | Funnel, weekly outreach velocity, today's call targets, follow-ups due, breakdowns by trade/source, autopilot status. |
+| ⚙️ **Profiles** | Separate course profile and agency profile power everything; both pre-configured. |
 
 ## Quick start
 

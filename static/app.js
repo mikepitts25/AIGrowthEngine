@@ -83,14 +83,60 @@ async function renderDashboard() {
       <p class="text-3xl font-bold mt-1">${value}</p>
       ${sub ? `<p class="text-xs text-slate-400 mt-1">${sub}</p>` : ''}
     </div>`;
+  const miniLead = l => `
+    <div class="py-2.5 flex items-start gap-3">
+      ${scoreBadge(l.intent_score)}
+      <div class="min-w-0 flex-1">
+        <a href="${esc(l.source_url || '#')}" target="_blank" class="font-medium text-sm hover:text-emerald-600 line-clamp-1">${esc(l.title)}</a>
+        <p class="text-xs text-slate-500">${esc(l.vertical || l.community || '')}${l.phone ? ' · 📞 ' + esc(l.phone) : ''}${l.next_action ? ' · ⏰ ' + esc(l.next_action) : ''}</p>
+      </div>
+    </div>`;
+  const chips = (obj, color) => Object.entries(obj).map(([k, v]) =>
+    `<span class="px-2 py-0.5 rounded-full text-xs ${color}">${esc(k)}: <b>${v}</b></span>`).join(' ');
   const totalLeads = Object.values(lc).reduce((a, b) => a + b, 0);
+  const ap = d.autopilot || {};
   root.innerHTML = `
-    <h2 class="text-2xl font-bold mb-6">Dashboard</h2>
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <div class="flex items-center justify-between mb-6">
+      <h2 class="text-2xl font-bold">Dashboard</h2>
+      <a href="/callsheet" target="_blank" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-semibold">🖨 Today's call sheet</a>
+    </div>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       ${stat('Total leads', totalLeads, `${lc.new || 0} new · ${lc.contacted || 0} contacted`)}
       ${stat('Customers won', lc.customer || 0, `${lc.responded || 0} in conversation`)}
-      ${stat('Outreach drafts', d.outreach_drafts, '')}
+      ${stat('Outreach this week', d.outreach_7d ?? 0, `${d.contacted_7d ?? 0} marked contacted · ${d.outreach_drafts} drafts total`)}
       ${stat('Content posts', Object.values(pc).reduce((a, b) => a + b, 0), `${pc.draft || 0} drafts · ${pc.posted || 0} posted`)}
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-6 flex items-center gap-3 flex-wrap text-sm">
+      <span class="font-semibold">${ap.enabled ? '🤖 Autopilot ON' : '🤖 Autopilot off'}</span>
+      ${ap.enabled ? `<span class="text-slate-500 text-xs">every ${ap.interval_hours}h</span>` : ''}
+      ${ap.last_run ? `<span class="text-slate-500 text-xs">last run ${esc(ap.last_run.slice(0, 16).replace('T', ' '))} UTC — ${esc(ap.last_result || '')}</span>` : '<span class="text-slate-400 text-xs">never run</span>'}
+      <button id="ap-run" class="ml-auto text-xs border px-3 py-1.5 rounded-lg hover:bg-slate-50">▶ Run now</button>
+      <button class="text-xs text-emerald-600 hover:underline" onclick="show('settings')">configure</button>
+    </div>
+    <div class="grid lg:grid-cols-2 gap-6 mb-6">
+      <div class="bg-white rounded-xl shadow-sm p-5">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-semibold">⏰ Follow-ups due</h3>
+          <button class="text-sm text-emerald-600 hover:underline" onclick="renderLeads('contacted', '')">pipeline →</button>
+        </div>
+        ${d.followups_due.length === 0
+          ? '<p class="text-sm text-slate-500">Nothing due. Set next-action dates on leads to build your follow-up queue.</p>'
+          : `<div class="divide-y">${d.followups_due.map(miniLead).join('')}</div>`}
+      </div>
+      <div class="bg-white rounded-xl shadow-sm p-5">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-semibold">📞 Today's call targets</h3>
+          <button class="text-sm text-emerald-600 hover:underline" onclick="renderLeads('new', 'business')">all →</button>
+        </div>
+        ${d.call_targets.length === 0
+          ? `<p class="text-sm text-slate-500">No uncontacted businesses. <button class="text-emerald-600 underline" onclick="show('agency')">Find some →</button></p>`
+          : `<div class="divide-y">${d.call_targets.map(miniLead).join('')}</div>`}
+      </div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-5 mb-6">
+      <h3 class="font-semibold mb-2">📊 Pipeline breakdown</h3>
+      <div class="flex flex-wrap gap-1.5 mb-2">${chips(d.by_vertical, 'bg-indigo-100 text-indigo-800') || '<span class="text-sm text-slate-500">no business leads yet</span>'}</div>
+      <div class="flex flex-wrap gap-1.5">${chips(d.by_source, 'bg-slate-100 text-slate-700')}</div>
     </div>
     <div class="bg-white rounded-xl shadow-sm p-5">
       <div class="flex items-center justify-between mb-3">
@@ -99,36 +145,53 @@ async function renderDashboard() {
       </div>
       ${d.top_leads.length === 0
         ? `<p class="text-sm text-slate-500">No leads yet. Head to <button class="text-emerald-600 underline" onclick="show('discover')">Find Leads</button> to discover potential customers.</p>`
-        : `<div class="divide-y">${d.top_leads.map(l => `
-            <div class="py-3 flex items-start gap-3">
-              ${scoreBadge(l.intent_score)}
-              <div class="min-w-0">
-                <a href="${esc(l.source_url || '#')}" target="_blank" class="font-medium text-sm hover:text-emerald-600 line-clamp-1">${esc(l.title)}</a>
-                <p class="text-xs text-slate-500">${esc(l.community)} · ${esc(l.author)}</p>
-              </div>
-            </div>`).join('')}</div>`}
+        : `<div class="divide-y">${d.top_leads.map(miniLead).join('')}</div>`}
     </div>`;
   window.show = show;
+  document.getElementById('ap-run').addEventListener('click', async (e) => {
+    e.target.disabled = true; e.target.textContent = 'Running… (~1 min)';
+    try {
+      const r = await api('/api/autopilot/run', { method: 'POST' });
+      toast('Autopilot: ' + r.result);
+      renderDashboard();
+    } catch (err) { toast(err.message, true); e.target.disabled = false; e.target.textContent = '▶ Run now'; }
+  });
 }
 
 // ------------------------------------------------------------ discover
 
 async function renderDiscover() {
-  const { profile } = await api('/api/settings');
+  const { profile, reddit_oauth_enabled, ai_enabled } = await api('/api/settings');
   root.innerHTML = `
-    <h2 class="text-2xl font-bold mb-2">Find Leads</h2>
-    <p class="text-slate-500 mb-6 text-sm">Scan Reddit and Hacker News for people actively asking about topics your business solves. Results are scored for buying intent (0–100) and saved to your Leads pipeline.</p>
+    <h2 class="text-2xl font-bold mb-2">Find Leads <span class="text-slate-400 text-lg">— course buyers</span></h2>
+    <p class="text-slate-500 mb-6 text-sm">Scan Bluesky, Hacker News, and Reddit for people actively asking about making money with AI. Results are scored for buying intent (0–100) and saved to your Leads pipeline.</p>
     <div class="bg-white rounded-xl shadow-sm p-5 mb-6">
       <label class="block text-sm font-medium mb-1">Keywords <span class="text-slate-400 font-normal">(one per line — defaults from Settings)</span></label>
       <textarea id="kw" rows="4" class="w-full border rounded-lg px-3 py-2 text-sm">${esc((profile.keywords || []).join('\n'))}</textarea>
       <div class="flex flex-wrap items-center gap-4 mt-3">
-        <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="src-reddit" checked class="rounded"> Reddit</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="src-bsky" checked class="rounded"> Bluesky <span class="text-slate-400">(free)</span></label>
         <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="src-hn" checked class="rounded"> Hacker News</label>
+        <label class="flex items-center gap-2 text-sm ${reddit_oauth_enabled ? '' : 'opacity-60'}"><input type="checkbox" id="src-reddit" ${reddit_oauth_enabled ? 'checked' : ''} class="rounded"> Reddit ${reddit_oauth_enabled ? '' : '<span class="text-slate-400">(often 403s without REDDIT_CLIENT_ID)</span>'}</label>
         <label class="flex items-center gap-2 text-sm">Min score <input type="number" id="min-score" value="25" min="0" max="100" class="w-16 border rounded px-2 py-1"></label>
         <button id="run-discover" class="ml-auto bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">🔎 Discover leads</button>
       </div>
     </div>
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-6 flex items-center gap-2 flex-wrap">
+      <span class="text-sm font-medium mr-1">Power tools:</span>
+      <button id="disc-draft-all" class="text-sm border px-3 py-1.5 rounded-lg hover:bg-slate-50">⚡ Draft replies for top 10</button>
+      <span id="disc-tools-result" class="text-xs text-slate-500"></span>
+    </div>
     <div id="discover-result"></div>`;
+
+  document.getElementById('disc-draft-all').addEventListener('click', async (e) => {
+    e.target.disabled = true; e.target.textContent = '⚡ Drafting…';
+    const out = document.getElementById('disc-tools-result');
+    try {
+      const r = await api('/api/leads/draft-batch', { method: 'POST', body: { channel: 'comment', kind: 'person', status: 'new', limit: 10 } });
+      out.innerHTML = `✅ drafted ${r.drafted} replies — <button class="text-emerald-600 underline" onclick="renderLeads('new', 'person')">review →</button>`;
+    } catch (err) { out.textContent = '❌ ' + err.message; }
+    e.target.disabled = false; e.target.textContent = '⚡ Draft replies for top 10';
+  });
 
   document.getElementById('run-discover').addEventListener('click', async (e) => {
     const btn = e.target;
@@ -138,8 +201,9 @@ async function renderDiscover() {
     try {
       const keywords = document.getElementById('kw').value.split('\n').map(s => s.trim()).filter(Boolean);
       const sources = [];
-      if (document.getElementById('src-reddit').checked) sources.push('reddit');
+      if (document.getElementById('src-bsky').checked) sources.push('bluesky');
       if (document.getElementById('src-hn').checked) sources.push('hackernews');
+      if (document.getElementById('src-reddit').checked) sources.push('reddit');
       const r = await api('/api/leads/discover', { method: 'POST', body: { keywords, sources, min_score: +document.getElementById('min-score').value } });
       out.innerHTML = `<div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm">
         ✅ Found <b>${r.found}</b> matching posts, added <b>${r.added}</b> new leads to your pipeline.
@@ -160,7 +224,7 @@ const VERTICAL_LABELS = {
 };
 
 async function renderAgency() {
-  const { agency, google_places_enabled } = await api('/api/settings');
+  const { agency, google_places_enabled, yelp_enabled, ai_enabled } = await api('/api/settings');
   root.innerHTML = `
     <h2 class="text-2xl font-bold mb-2">Agency Clients</h2>
     <p class="text-slate-500 mb-6 text-sm">Find local home-service businesses that need <b>${esc(agency.agency_name || 'your agency')}</b>'s AI receptionist — scored for missed-call pain (no website, no evening/weekend hours, small review footprint). Then draft the cold email, SMS, or a call prep sheet.</p>
@@ -177,11 +241,40 @@ async function renderAgency() {
         <label class="flex items-center gap-2 text-sm ${google_places_enabled ? '' : 'opacity-50'}">
           <input type="checkbox" id="ag-src-google" ${google_places_enabled ? 'checked' : 'disabled'} class="rounded"> Google Places
           ${google_places_enabled ? '' : '<span class="text-slate-400">(set GOOGLE_PLACES_API_KEY)</span>'}</label>
+        <label class="flex items-center gap-2 text-sm ${yelp_enabled ? '' : 'opacity-50'}">
+          <input type="checkbox" id="ag-src-yelp" ${yelp_enabled ? 'checked' : 'disabled'} class="rounded"> Yelp
+          ${yelp_enabled ? '' : '<span class="text-slate-400">(set YELP_API_KEY)</span>'}</label>
         <label class="flex items-center gap-2 text-sm">Min score <input type="number" id="ag-min-score" value="30" min="0" max="100" class="w-16 border rounded px-2 py-1"></label>
         <button id="run-agency" class="ml-auto bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">🏢 Find businesses</button>
       </div>
     </div>
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-6 flex items-center gap-2 flex-wrap">
+      <span class="text-sm font-medium mr-1">Power tools:</span>
+      <button id="ag-enrich" class="text-sm border px-3 py-1.5 rounded-lg hover:bg-slate-50">🔬 Enrich all new leads</button>
+      <button id="ag-draft-all" class="text-sm border px-3 py-1.5 rounded-lg hover:bg-slate-50" ${ai_enabled ? '' : 'title="Works with templates too"'}>⚡ Draft emails for top 10</button>
+      <a href="/callsheet" target="_blank" class="text-sm border px-3 py-1.5 rounded-lg hover:bg-slate-50">🖨 Call sheet</a>
+      <span id="ag-tools-result" class="text-xs text-slate-500"></span>
+    </div>
     <div id="agency-result"></div>`;
+
+  document.getElementById('ag-enrich').addEventListener('click', async (e) => {
+    e.target.disabled = true; e.target.textContent = '🔬 Enriching… (~30s)';
+    const out = document.getElementById('ag-tools-result');
+    try {
+      const r = await api('/api/leads/enrich', { method: 'POST', body: {} });
+      out.textContent = `✅ checked ${r.checked}, enriched ${r.enriched}, found ${r.emails_found} emails`;
+    } catch (err) { out.textContent = '❌ ' + err.message; }
+    e.target.disabled = false; e.target.textContent = '🔬 Enrich all new leads';
+  });
+  document.getElementById('ag-draft-all').addEventListener('click', async (e) => {
+    e.target.disabled = true; e.target.textContent = '⚡ Drafting…';
+    const out = document.getElementById('ag-tools-result');
+    try {
+      const r = await api('/api/leads/draft-batch', { method: 'POST', body: { channel: 'email', limit: 10 } });
+      out.innerHTML = `✅ drafted ${r.drafted} emails — <button class="text-emerald-600 underline" onclick="renderLeads('new', 'business')">review →</button>`;
+    } catch (err) { out.textContent = '❌ ' + err.message; }
+    e.target.disabled = false; e.target.textContent = '⚡ Draft emails for top 10';
+  });
 
   document.getElementById('run-agency').addEventListener('click', async (e) => {
     const btn = e.target;
@@ -194,6 +287,7 @@ async function renderAgency() {
       const sources = [];
       if (document.getElementById('ag-src-osm').checked) sources.push('osm');
       if (document.getElementById('ag-src-google').checked) sources.push('google');
+      if (document.getElementById('ag-src-yelp').checked) sources.push('yelp');
       const r = await api('/api/agency/discover', { method: 'POST', body: { cities, verticals, sources, min_score: +document.getElementById('ag-min-score').value } });
       out.innerHTML = `<div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm">
         ✅ Found <b>${r.found}</b> businesses (via ${r.sources_used.join(' + ')}), added <b>${r.added}</b> new prospects.
@@ -209,6 +303,7 @@ async function renderAgency() {
 // ------------------------------------------------------------ leads
 
 async function renderLeads(filter = '', kind = '') {
+  window._leadFilter = filter; window._leadKind = kind;
   const params = new URLSearchParams();
   if (filter) params.set('status', filter);
   if (kind) params.set('kind', kind);
@@ -282,20 +377,38 @@ function leadCard(l) {
   let meta = {};
   try { meta = JSON.parse(l.meta || '{}'); } catch {}
   const reasons = meta.score_reasons || [];
+  const qual = meta.ai_qualification || null;
+  const enr = meta.enrichment || null;
   const bizChips = isBiz ? `
     <div class="flex flex-wrap gap-1.5 mt-1.5">
       ${l.vertical ? `<span class="px-2 py-0.5 rounded-full text-xs bg-indigo-100 text-indigo-800">${esc(VERTICAL_LABELS[l.vertical] || l.vertical)}</span>` : ''}
       ${l.phone ? `<span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700">📞 ${esc(l.phone)}</span>` : ''}
+      ${l.email ? `<span class="px-2 py-0.5 rounded-full text-xs bg-sky-100 text-sky-800">✉️ ${esc(l.email)}</span>` : ''}
       ${l.website ? `<a href="${esc(l.website)}" target="_blank" class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700 hover:bg-slate-200">🌐 site</a>`
                   : '<span class="px-2 py-0.5 rounded-full text-xs bg-rose-100 text-rose-700">no website</span>'}
       ${meta.rating ? `<span class="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-800">⭐ ${meta.rating} (${meta.review_count ?? '?'})</span>` : ''}
+      ${enr ? `<span class="px-2 py-0.5 rounded-full text-xs ${enr.has_booking ? 'bg-slate-200 text-slate-600' : 'bg-rose-100 text-rose-700'}">${enr.has_booking ? 'has booking' : enr.reachable ? 'no online booking' : 'site unreachable'}</span>` : ''}
+      ${qual ? `<span class="px-2 py-0.5 rounded-full text-xs bg-violet-100 text-violet-800" title="${esc(qual.rationale || '')}">🧠 fit ${qual.fit_score}</span>` : ''}
     </div>
-    ${reasons.length ? `<p class="text-xs text-slate-500 mt-1.5">🎯 ${reasons.map(esc).join(' · ')}</p>` : ''}` : '';
+    ${reasons.length ? `<p class="text-xs text-slate-500 mt-1.5">🎯 ${reasons.map(esc).join(' · ')}</p>` : ''}
+    ${qual && qual.opener_angle ? `<p class="text-xs text-violet-700 mt-1">💡 ${esc(qual.opener_angle)}</p>` : ''}` : '';
+  // course leads get the AI fit chip + opener angle too
+  const personQual = (!isBiz && qual) ? `
+    <div class="flex flex-wrap gap-1.5 mt-1.5">
+      <span class="px-2 py-0.5 rounded-full text-xs bg-violet-100 text-violet-800" title="${esc(qual.rationale || '')}">🧠 fit ${qual.fit_score}</span>
+    </div>
+    ${qual.opener_angle ? `<p class="text-xs text-violet-700 mt-1">💡 ${esc(qual.opener_angle)}</p>` : ''}` : '';
+  const nextChip = l.next_action_at
+    ? `<p class="text-xs text-amber-700 mt-1.5">⏰ ${esc(l.next_action || 'follow up')} — ${esc(l.next_action_at)}</p>` : '';
   const draftBtns = isBiz ? `
       <button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded-lg" data-id="${l.id}" data-channel="email">✉️ Email</button>
       <button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded-lg" data-id="${l.id}" data-channel="sms">💬 SMS</button>
-      <button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded-lg" data-id="${l.id}" data-channel="callprep">📞 Call prep</button>`
-    : `<button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg" data-id="${l.id}">✨ Draft outreach</button>`;
+      <button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded-lg" data-id="${l.id}" data-channel="callprep">📞 Call prep</button>
+      <button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded-lg" data-id="${l.id}" data-channel="sequence">📧 Sequence</button>
+      <button class="enrich-btn text-xs border px-2 py-1 rounded-lg hover:bg-slate-50" data-id="${l.id}" title="Probe website: emails, online booking, dead-site check">🔬</button>
+      <button class="qualify-btn text-xs border px-2 py-1 rounded-lg hover:bg-slate-50" data-id="${l.id}" title="AI fit score">🧠</button>`
+    : `<button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg" data-id="${l.id}">✨ Draft outreach</button>
+       <button class="qualify-btn text-xs border px-2 py-1 rounded-lg hover:bg-slate-50" data-id="${l.id}" title="AI fit score">🧠</button>`;
   return `
   <div class="bg-white rounded-xl shadow-sm p-4" id="lead-${l.id}">
     <div class="flex items-start gap-3">
@@ -307,8 +420,9 @@ function leadCard(l) {
           <span class="px-2 py-0.5 rounded-full text-xs ${STATUS_COLORS[l.status] || ''}">${l.status}</span>
         </div>
         <p class="text-xs text-slate-500 mt-0.5">${esc(l.community)}${l.author ? ' · ' + esc(l.author) : ''} · via ${esc(l.source)}</p>
-        ${bizChips}
+        ${bizChips}${personQual}
         ${l.snippet ? `<p class="text-xs text-slate-600 mt-1.5 line-clamp-2">${esc(l.snippet)}</p>` : ''}
+        ${nextChip}
         ${l.notes ? `<p class="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 mt-1.5">📝 ${esc(l.notes)}</p>` : ''}
       </div>
       <div class="flex flex-col items-end gap-1.5 shrink-0">
@@ -317,9 +431,15 @@ function leadCard(l) {
         </select>
         <div class="flex gap-1 flex-wrap justify-end">
           ${draftBtns}
+          <button class="na-btn text-xs border px-2 py-1 rounded-lg hover:bg-slate-50" data-id="${l.id}" title="Schedule next action">⏰</button>
           <button class="del-btn text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg" data-id="${l.id}">🗑</button>
         </div>
       </div>
+    </div>
+    <div class="na-row mt-2 hidden items-center gap-2">
+      <input class="na-text border rounded-lg px-2 py-1 text-xs flex-1" placeholder="next action (e.g. follow-up email #2)" value="${esc(l.next_action || '')}">
+      <input type="date" class="na-date border rounded-lg px-2 py-1 text-xs" value="${esc(l.next_action_at || '')}">
+      <button class="na-save text-xs bg-slate-900 text-white px-3 py-1 rounded-lg">Save</button>
     </div>
     <div class="outreach-area mt-3 hidden" data-id="${l.id}"></div>
   </div>`;
@@ -330,6 +450,36 @@ function wireLeadCard(l) {
   card.querySelector('.lead-status').addEventListener('change', async (e) => {
     await api(`/api/leads/${l.id}`, { method: 'PATCH', body: { status: e.target.value } });
     toast(`Marked ${e.target.value}`);
+  });
+  card.querySelector('.na-btn').addEventListener('click', () => {
+    const row = card.querySelector('.na-row');
+    row.classList.toggle('hidden');
+    row.classList.toggle('flex', !row.classList.contains('hidden'));
+  });
+  card.querySelector('.na-save').addEventListener('click', async () => {
+    await api(`/api/leads/${l.id}`, { method: 'PATCH', body: {
+      next_action: card.querySelector('.na-text').value.trim(),
+      next_action_at: card.querySelector('.na-date').value,
+    }});
+    toast('Next action saved ⏰');
+  });
+  const enrichBtn = card.querySelector('.enrich-btn');
+  if (enrichBtn) enrichBtn.addEventListener('click', async (e) => {
+    e.target.disabled = true; e.target.textContent = '…';
+    try {
+      const r = await api('/api/leads/enrich', { method: 'POST', body: { ids: [l.id] } });
+      toast(r.enriched ? `Enriched — ${r.emails_found ? 'email found!' : 'signals updated'}` : 'Nothing to probe');
+      renderLeads(window._leadFilter || '', window._leadKind || '');
+    } catch (err) { toast(err.message, true); e.target.disabled = false; e.target.textContent = '🔬'; }
+  });
+  const qualifyBtn = card.querySelector('.qualify-btn');
+  if (qualifyBtn) qualifyBtn.addEventListener('click', async (e) => {
+    e.target.disabled = true; e.target.textContent = '…';
+    try {
+      const r = await api(`/api/leads/${l.id}/qualify`, { method: 'POST' });
+      toast(`AI fit: ${r.fit_score} — ${r.rationale.slice(0, 80)}`);
+      renderLeads(window._leadFilter || '', window._leadKind || '');
+    } catch (err) { toast(err.message, true); e.target.disabled = false; e.target.textContent = '🧠'; }
   });
   card.querySelector('.del-btn').addEventListener('click', async () => {
     if (!confirm('Delete this lead?')) return;
@@ -344,7 +494,7 @@ function wireLeadCard(l) {
     try {
       const channel = e.target.dataset.channel || (l.source === 'manual' ? 'dm' : 'comment');
       const d = await api(`/api/leads/${l.id}/draft`, { method: 'POST', body: { channel } });
-      const rows = channel === 'callprep' ? 16 : channel === 'sms' ? 3 : 8;
+      const rows = (channel === 'callprep' || channel === 'sequence') ? 18 : channel === 'sms' ? 3 : 8;
       area.innerHTML = `
         <div class="bg-slate-50 border rounded-lg p-3">
           <div class="flex items-center justify-between mb-2">
@@ -374,20 +524,55 @@ function wireLeadCard(l) {
 async function renderContent() {
   const posts = await api('/api/posts');
   root.innerHTML = `
-    <h2 class="text-2xl font-bold mb-2">Content Studio</h2>
-    <p class="text-slate-500 mb-6 text-sm">Generate platform-tailored social posts from a single topic. Copy them out or track them through draft → scheduled → posted.</p>
-    <div class="bg-white rounded-xl shadow-sm p-5 mb-6">
-      <label class="block text-sm font-medium mb-1">Topic or idea</label>
-      <input id="topic" placeholder="e.g. 3 realistic ways beginners earn their first $100 with AI" class="w-full border rounded-lg px-3 py-2 text-sm mb-3">
+    <h2 class="text-2xl font-bold mb-2">Content Studio <span class="text-slate-400 text-lg">— grow your audience</span></h2>
+    <p class="text-slate-500 mb-6 text-sm">Generate platform-tailored posts from a topic, plan a whole week at once, or get fresh topic ideas. Track them through draft → scheduled → posted.</p>
+    <div class="bg-white rounded-xl shadow-sm p-5 mb-4">
+      <div class="flex items-center gap-2 mb-1">
+        <label class="block text-sm font-medium flex-1">Topic or idea</label>
+        <button id="topic-ideas" class="text-xs text-emerald-600 hover:underline">💡 Suggest topics</button>
+      </div>
+      <input id="topic" placeholder="e.g. 3 realistic ways beginners earn their first $100 with AI" class="w-full border rounded-lg px-3 py-2 text-sm mb-1">
+      <div id="topic-chips" class="flex flex-wrap gap-1.5 mb-3"></div>
       <div class="flex flex-wrap items-center gap-4">
         ${Object.entries(PLATFORM_LABELS).map(([k, v]) => `
           <label class="flex items-center gap-2 text-sm"><input type="checkbox" class="platform rounded" value="${k}" ${k === 'x' || k === 'linkedin' ? 'checked' : ''}> ${v}</label>`).join('')}
         <button id="gen" class="ml-auto bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">✨ Generate posts</button>
       </div>
     </div>
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-6 flex items-center gap-3 flex-wrap">
+      <span class="text-sm font-medium">📅 Content calendar:</span>
+      <label class="flex items-center gap-2 text-sm">
+        <input type="number" id="cal-days" value="7" min="1" max="14" class="w-14 border rounded px-2 py-1"> days, auto-scheduled daily</label>
+      <button id="gen-cal" class="text-sm border px-3 py-1.5 rounded-lg hover:bg-slate-50">🗓 Plan my week</button>
+      <span id="cal-result" class="text-xs text-slate-500"></span>
+    </div>
     <div id="post-list" class="space-y-3">${posts.map(postCard).join('') || '<p class="text-sm text-slate-500 bg-white rounded-xl p-5">No posts yet — generate your first batch above.</p>'}</div>`;
 
   posts.forEach(wirePostCard);
+
+  document.getElementById('topic-ideas').addEventListener('click', async (e) => {
+    e.target.disabled = true; e.target.textContent = '💡 thinking…';
+    try {
+      const r = await api('/api/content/topics', { method: 'POST' });
+      document.getElementById('topic-chips').innerHTML = r.topics.map(t =>
+        `<button class="topic-pick text-xs bg-slate-100 hover:bg-emerald-100 px-2 py-1 rounded-full text-left">${esc(t)}</button>`).join('');
+      document.querySelectorAll('.topic-pick').forEach(b =>
+        b.addEventListener('click', () => { document.getElementById('topic').value = b.textContent; }));
+    } catch (err) { toast(err.message, true); }
+    e.target.disabled = false; e.target.textContent = '💡 Suggest topics';
+  });
+
+  document.getElementById('gen-cal').addEventListener('click', async (e) => {
+    e.target.disabled = true; e.target.textContent = '🗓 Planning…';
+    const out = document.getElementById('cal-result');
+    try {
+      const days = +document.getElementById('cal-days').value || 7;
+      const r = await api('/api/content/calendar', { method: 'POST', body: { days } });
+      out.textContent = `✅ ${r.count} posts scheduled over ${days} days`;
+      toast(`Planned ${r.count} posts`);
+      renderContent();
+    } catch (err) { toast(err.message, true); e.target.disabled = false; e.target.textContent = '🗓 Plan my week'; }
+  });
 
   document.getElementById('gen').addEventListener('click', async (e) => {
     const topic = document.getElementById('topic').value.trim();
@@ -496,6 +681,12 @@ async function renderSettings() {
       <button id="save-agency" class="bg-slate-900 text-white px-5 py-2 rounded-lg text-sm font-semibold">Save agency profile</button>
     </div>
 
+    <h3 class="text-lg font-bold mt-8 mb-2">🛸 Autopilot</h3>
+    <p class="text-slate-500 mb-4 text-sm">Hands-free growth: automatically re-run business discovery and enrichment on a schedule while the server is up.</p>
+    <div class="bg-white rounded-xl shadow-sm p-5 space-y-4 max-w-2xl" id="autopilot-card">
+      <p class="text-sm text-slate-500">Loading…</p>
+    </div>
+
     <h3 class="text-lg font-bold mt-8 mb-2">🤖 AI Provider</h3>
     <p class="text-slate-500 mb-4 text-sm">Any LLM works — pick a provider, set a model and key, and hit Test. With nothing configured the app falls back to templates. Ollama runs free on your own machine.</p>
     <div class="bg-white rounded-xl shadow-sm p-5 space-y-4 max-w-2xl">
@@ -532,6 +723,32 @@ async function renderSettings() {
     }});
     toast('Profile saved');
   });
+
+  // --- Autopilot card ---
+  (async () => {
+    const ap = await api('/api/autopilot');
+    const card = document.getElementById('autopilot-card');
+    card.innerHTML = `
+      <label class="flex items-center gap-2 text-sm font-medium">
+        <input type="checkbox" id="ap-enabled" class="rounded" ${ap.enabled ? 'checked' : ''}> Enable autopilot</label>
+      <div class="flex flex-wrap items-center gap-4">
+        <label class="flex items-center gap-2 text-sm">Every
+          <input type="number" id="ap-interval" value="${ap.interval_hours}" min="1" max="168" class="w-16 border rounded px-2 py-1"> hours</label>
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" id="ap-enrich" class="rounded" ${ap.enrich ? 'checked' : ''}> Auto-enrich new leads</label>
+      </div>
+      <p class="text-xs text-slate-400">Sources: OSM always; Google/Yelp join automatically when their API keys are set. ${ap.last_run ? `Last run: ${esc(ap.last_run.slice(0, 16).replace('T', ' '))} UTC — ${esc(ap.last_result || '')}` : 'Never run yet.'}</p>
+      <button id="ap-save" class="bg-slate-900 text-white px-5 py-2 rounded-lg text-sm font-semibold">Save autopilot</button>`;
+    document.getElementById('ap-save').addEventListener('click', async () => {
+      await api('/api/autopilot', { method: 'PUT', body: {
+        enabled: document.getElementById('ap-enabled').checked,
+        interval_hours: +document.getElementById('ap-interval').value || 24,
+        enrich: document.getElementById('ap-enrich').checked,
+        sources: ['osm', 'google', 'yelp'],
+      }});
+      toast('Autopilot saved 🛸');
+    });
+  })();
 
   // --- AI provider card ---
   const provSel = document.getElementById('llm-provider');
