@@ -1,18 +1,13 @@
-"""Claude-powered content and outreach generation, with template fallbacks.
+"""AI-powered content and outreach generation, with template fallbacks.
 
-Set ANTHROPIC_API_KEY (or log in with `ant auth login`) to enable AI
-generation. Without credentials the app still works using templates.
+Works with any LLM provider configured in Settings (Anthropic, OpenAI,
+Gemini, OpenRouter, Groq, local Ollama, or a custom OpenAI-compatible
+endpoint) — see app/llm.py. With no provider configured the app still
+works using templates.
 """
 import json
-import os
 
-try:
-    import anthropic
-    _HAS_SDK = True
-except ImportError:
-    _HAS_SDK = False
-
-MODEL = "claude-opus-4-8"
+from . import llm
 
 PLATFORM_SPECS = {
     "x": "X/Twitter post, max 280 characters, punchy hook first line, 1-2 hashtags max",
@@ -22,22 +17,8 @@ PLATFORM_SPECS = {
 }
 
 
-def _client():
-    if not _HAS_SDK:
-        return None
-    # The SDK resolves ANTHROPIC_API_KEY / auth profiles itself; only skip
-    # when we can tell there are no credentials at all.
-    if not os.environ.get("ANTHROPIC_API_KEY") and not os.environ.get("ANTHROPIC_AUTH_TOKEN") \
-            and not os.path.exists(os.path.expanduser("~/.config/anthropic")):
-        return None
-    try:
-        return anthropic.Anthropic()
-    except Exception:
-        return None
-
-
 def ai_available() -> bool:
-    return _client() is not None
+    return llm.available()
 
 
 def _profile_context(profile: dict) -> str:
@@ -54,37 +35,26 @@ def _profile_context(profile: dict) -> str:
 
 def draft_outreach(profile: dict, lead: dict, channel: str) -> tuple[str, str]:
     """Return (content, generated_by). Personalizes to the lead's post."""
-    client = _client()
-    if client is not None:
-        try:
-            resp = client.messages.create(
-                model=MODEL,
-                max_tokens=1024,
-                thinking={"type": "adaptive"},
-                system=(
-                    "You write authentic, helpful outreach for a small business. "
-                    "Rules: lead with genuine value specific to what the person posted; "
-                    "never open with a pitch; keep it short; sound human, not corporate; "
-                    "one soft mention of the product at most, and only where it truly helps. "
-                    "Respect community norms — on Reddit especially, be a helpful member first.\n\n"
-                    + _profile_context(profile)
-                ),
-                messages=[{
-                    "role": "user",
-                    "content": (
-                        f"Draft a {channel} reply/message to this person. "
-                        f"Return ONLY the message text, no preamble.\n\n"
-                        f"Where they posted: {lead.get('community', '')}\n"
-                        f"Their post title: {lead.get('title', '')}\n"
-                        f"Their post text: {lead.get('snippet', '') or '(no body text)'}"
-                    ),
-                }],
-            )
-            text = next((b.text for b in resp.content if b.type == "text"), "").strip()
-            if text:
-                return text, "ai"
-        except Exception:
-            pass  # fall through to template
+    text = llm.complete(
+        system=(
+            "You write authentic, helpful outreach for a small business. "
+            "Rules: lead with genuine value specific to what the person posted; "
+            "never open with a pitch; keep it short; sound human, not corporate; "
+            "one soft mention of the product at most, and only where it truly helps. "
+            "Respect community norms — on Reddit especially, be a helpful member first.\n\n"
+            + _profile_context(profile)
+        ),
+        user=(
+            f"Draft a {channel} reply/message to this person. "
+            f"Return ONLY the message text, no preamble.\n\n"
+            f"Where they posted: {lead.get('community', '')}\n"
+            f"Their post title: {lead.get('title', '')}\n"
+            f"Their post text: {lead.get('snippet', '') or '(no body text)'}"
+        ),
+        max_tokens=1024,
+    )
+    if text:
+        return text, "ai"
 
     # Template fallback
     name = profile.get("business_name", "our guide")
@@ -162,43 +132,32 @@ def draft_agency_outreach(profile: dict, lead: dict, channel: str) -> tuple[str,
     trade = TRADE_ADJECTIVES.get(vertical, vertical or "home service")
     city = lead.get("city") or lead.get("community", "")
 
-    client = _client()
-    if client is not None:
-        try:
-            resp = client.messages.create(
-                model=MODEL,
-                max_tokens=1500,
-                thinking={"type": "adaptive"},
-                system=(
-                    "You write sales outreach for a small AI agency selling AI phone receptionists "
-                    "to home service businesses (HVAC, plumbing, roofing…). The core pain: owners "
-                    "lose jobs because calls come in while they're on a ladder, under a house, or "
-                    "after hours — and the caller books a competitor. Rules: plain-spoken and "
-                    "specific, never hypey; lead with their pain, not our tech; anchor price to the "
-                    "cost of one missed job; the strongest proof is letting the AI call them so "
-                    "they can hear it. Sound like a fellow small-business owner, not a marketer.\n\n"
-                    + _agency_context(profile)
-                ),
-                messages=[{
-                    "role": "user",
-                    "content": (
-                        f"Draft {spec}.\n"
-                        f"Return ONLY the outreach text, no preamble.\n\n"
-                        f"Business: {business}\n"
-                        f"Trade: {vertical}\n"
-                        f"City: {city}\n"
-                        f"Phone: {lead.get('phone') or 'unknown'}\n"
-                        f"Website: {lead.get('website') or 'NONE'}\n"
-                        f"Details: {lead.get('snippet', '')}\n"
-                        f"Pain signals we detected: {'; '.join(gaps) or 'none detected'}"
-                    ),
-                }],
-            )
-            text = next((b.text for b in resp.content if b.type == "text"), "").strip()
-            if text:
-                return text, "ai"
-        except Exception:
-            pass  # fall through to template
+    text = llm.complete(
+        system=(
+            "You write sales outreach for a small AI agency selling AI phone receptionists "
+            "to home service businesses (HVAC, plumbing, roofing…). The core pain: owners "
+            "lose jobs because calls come in while they're on a ladder, under a house, or "
+            "after hours — and the caller books a competitor. Rules: plain-spoken and "
+            "specific, never hypey; lead with their pain, not our tech; anchor price to the "
+            "cost of one missed job; the strongest proof is letting the AI call them so "
+            "they can hear it. Sound like a fellow small-business owner, not a marketer.\n\n"
+            + _agency_context(profile)
+        ),
+        user=(
+            f"Draft {spec}.\n"
+            f"Return ONLY the outreach text, no preamble.\n\n"
+            f"Business: {business}\n"
+            f"Trade: {vertical}\n"
+            f"City: {city}\n"
+            f"Phone: {lead.get('phone') or 'unknown'}\n"
+            f"Website: {lead.get('website') or 'NONE'}\n"
+            f"Details: {lead.get('snippet', '')}\n"
+            f"Pain signals we detected: {'; '.join(gaps) or 'none detected'}"
+        ),
+        max_tokens=1500,
+    )
+    if text:
+        return text, "ai"
 
     # Template fallbacks — modeled on the Colibri Code sales materials.
     name = profile.get("agency_name", "our agency")
@@ -267,62 +226,51 @@ def draft_agency_outreach(profile: dict, lead: dict, channel: str) -> tuple[str,
 
 # ---------------------------------------------------------------- content
 
+POSTS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "posts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "platform": {"type": "string", "enum": list(PLATFORM_SPECS)},
+                    "content": {"type": "string"},
+                    "hashtags": {"type": "string"},
+                },
+                "required": ["platform", "content", "hashtags"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["posts"],
+    "additionalProperties": False,
+}
+
+
 def generate_posts(profile: dict, topic: str, platforms: list[str]) -> list[dict]:
     """Generate one post per platform. Returns [{platform, content, hashtags, generated_by}]."""
-    client = _client()
-    if client is not None:
-        try:
-            specs = "\n".join(f"- {p}: {PLATFORM_SPECS.get(p, 'social post')}" for p in platforms)
-            resp = client.messages.create(
-                model=MODEL,
-                max_tokens=4096,
-                thinking={"type": "adaptive"},
-                system=(
-                    "You are a social media strategist for a small business. Write posts that give "
-                    "real value first and promote softly. Avoid hype words (unlock, game-changer, "
-                    "revolutionize) and AI-slop phrasing.\n\n" + _profile_context(profile)
-                ),
-                messages=[{
-                    "role": "user",
-                    "content": (
-                        f"Topic: {topic}\n\nWrite one post for each platform:\n{specs}"
-                    ),
-                }],
-                output_config={
-                    "format": {
-                        "type": "json_schema",
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "posts": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "object",
-                                        "properties": {
-                                            "platform": {"type": "string", "enum": list(PLATFORM_SPECS)},
-                                            "content": {"type": "string"},
-                                            "hashtags": {"type": "string"},
-                                        },
-                                        "required": ["platform", "content", "hashtags"],
-                                        "additionalProperties": False,
-                                    },
-                                },
-                            },
-                            "required": ["posts"],
-                            "additionalProperties": False,
-                        },
-                    },
-                },
-            )
-            text = next((b.text for b in resp.content if b.type == "text"), "")
-            posts = json.loads(text).get("posts", [])
-            wanted = [p for p in posts if p.get("platform") in platforms]
-            if wanted:
-                for p in wanted:
-                    p["generated_by"] = "ai"
-                return wanted
-        except Exception:
-            pass  # fall through to templates
+    specs = "\n".join(f"- {p}: {PLATFORM_SPECS.get(p, 'social post')}" for p in platforms)
+    text = llm.complete(
+        system=(
+            "You are a social media strategist for a small business. Write posts that give "
+            "real value first and promote softly. Avoid hype words (unlock, game-changer, "
+            "revolutionize) and AI-slop phrasing.\n\n" + _profile_context(profile)
+        ),
+        user=f"Topic: {topic}\n\nWrite one post for each platform:\n{specs}",
+        max_tokens=4096,
+        json_schema=POSTS_SCHEMA,
+    )
+    if text:
+        data = llm.parse_json_response(text)
+        posts = (data or {}).get("posts", [])
+        wanted = [p for p in posts
+                  if isinstance(p, dict) and p.get("platform") in platforms and p.get("content")]
+        if wanted:
+            for p in wanted:
+                p["generated_by"] = "ai"
+                p.setdefault("hashtags", "")
+            return wanted
 
     # Template fallback
     name = profile.get("business_name", "our product")

@@ -63,10 +63,11 @@ function show(view) {
 
 async function refreshAiBadge() {
   try {
-    const { ai_enabled } = await api('/api/settings');
+    const { ai_enabled, llm } = await api('/api/settings');
+    const label = llm?.providers?.[llm.provider]?.label || llm?.provider || 'AI';
     document.getElementById('ai-badge').innerHTML = ai_enabled
-      ? '<span class="w-2 h-2 rounded-full bg-emerald-400"></span> AI: Claude connected'
-      : '<span class="w-2 h-2 rounded-full bg-amber-400"></span> AI: templates only <span class="text-slate-500">(set ANTHROPIC_API_KEY)</span>';
+      ? `<span class="w-2 h-2 rounded-full bg-emerald-400"></span> AI: ${esc(label)}`
+      : '<span class="w-2 h-2 rounded-full bg-amber-400"></span> AI: templates only <span class="text-slate-500">(configure in Settings)</span>';
   } catch {}
 }
 
@@ -456,7 +457,9 @@ function wirePostCard(p) {
 // ------------------------------------------------------------ settings
 
 async function renderSettings() {
-  const { profile, agency, ai_enabled } = await api('/api/settings');
+  const settings = await api('/api/settings');
+  const { profile, agency } = settings;
+  let llm = settings.llm;
   root.innerHTML = `
     <h2 class="text-2xl font-bold mb-2">Settings</h2>
     <p class="text-slate-500 mb-6 text-sm">This business profile powers lead scoring, outreach drafting, and content generation.</p>
@@ -493,11 +496,27 @@ async function renderSettings() {
       <button id="save-agency" class="bg-slate-900 text-white px-5 py-2 rounded-lg text-sm font-semibold">Save agency profile</button>
     </div>
 
-    <div class="bg-white rounded-xl shadow-sm p-5 mt-6 max-w-2xl text-sm">
-      <h3 class="font-semibold mb-2">🤖 AI status</h3>
-      ${ai_enabled
-        ? '<p class="text-emerald-700">Claude is connected — outreach and content are AI-personalized.</p>'
-        : `<p class="text-slate-600">Running in <b>template mode</b>. To enable AI-personalized outreach and content, set the <code class="bg-slate-100 px-1 rounded">ANTHROPIC_API_KEY</code> environment variable before starting the server, then restart. Get a key at <a class="text-emerald-600 underline" href="https://platform.claude.com" target="_blank">platform.claude.com</a>.</p>`}
+    <h3 class="text-lg font-bold mt-8 mb-2">🤖 AI Provider</h3>
+    <p class="text-slate-500 mb-4 text-sm">Any LLM works — pick a provider, set a model and key, and hit Test. With nothing configured the app falls back to templates. Ollama runs free on your own machine.</p>
+    <div class="bg-white rounded-xl shadow-sm p-5 space-y-4 max-w-2xl">
+      <div><label class="block text-sm font-medium mb-1">Provider</label>
+        <select id="llm-provider" class="w-full border rounded-lg px-3 py-2 text-sm bg-white">
+          ${Object.entries(llm.providers).map(([k, v]) => `
+            <option value="${k}" ${k === llm.provider ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}
+        </select></div>
+      <div><label class="block text-sm font-medium mb-1">Model <span class="text-slate-400 font-normal" id="llm-model-hint"></span></label>
+        <input id="llm-model" class="w-full border rounded-lg px-3 py-2 text-sm" value="${esc(llm.model || '')}"></div>
+      <div><label class="block text-sm font-medium mb-1">API key</label>
+        <input id="llm-key" type="password" class="w-full border rounded-lg px-3 py-2 text-sm"
+          placeholder="${llm.api_key_set ? '••••••••  (saved — leave blank to keep)' : 'paste your API key'}"></div>
+      <div id="llm-base-row"><label class="block text-sm font-medium mb-1">Base URL <span class="text-slate-400 font-normal">(only for Ollama / custom endpoints)</span></label>
+        <input id="llm-base" class="w-full border rounded-lg px-3 py-2 text-sm" value="${esc(llm.base_url || '')}" placeholder=""></div>
+      <div class="flex items-center gap-2">
+        <button id="save-llm" class="bg-slate-900 text-white px-5 py-2 rounded-lg text-sm font-semibold">Save provider</button>
+        <button id="test-llm" class="border px-5 py-2 rounded-lg text-sm font-semibold hover:bg-slate-50">🔌 Test connection</button>
+        <span id="llm-test-result" class="text-sm"></span>
+      </div>
+      <div id="llm-test-detail" class="hidden text-xs bg-slate-50 border rounded-lg p-3 whitespace-pre-wrap"></div>
     </div>`;
 
   document.getElementById('save-profile').addEventListener('click', async () => {
@@ -512,6 +531,53 @@ async function renderSettings() {
       subreddits: lines('pf-subreddits'),
     }});
     toast('Profile saved');
+  });
+
+  // --- AI provider card ---
+  const provSel = document.getElementById('llm-provider');
+  const modelInput = document.getElementById('llm-model');
+  const baseInput = document.getElementById('llm-base');
+  const syncProviderHints = (resetFields) => {
+    const spec = llm.providers[provSel.value] || {};
+    document.getElementById('llm-model-hint').textContent = spec.default_model ? `(default: ${spec.default_model})` : '';
+    modelInput.placeholder = spec.default_model || 'model id';
+    baseInput.placeholder = spec.default_base_url || 'https://your-endpoint/v1';
+    if (resetFields) { modelInput.value = ''; baseInput.value = ''; }
+  };
+  syncProviderHints(false);
+  provSel.addEventListener('change', () => syncProviderHints(true));
+
+  document.getElementById('save-llm').addEventListener('click', async () => {
+    const r = await api('/api/settings/llm', { method: 'PUT', body: {
+      provider: provSel.value,
+      model: modelInput.value.trim(),
+      api_key: document.getElementById('llm-key').value.trim(),
+      base_url: baseInput.value.trim(),
+    }});
+    toast('AI provider saved');
+    llm = r.llm;
+    document.getElementById('llm-key').value = '';
+    document.getElementById('llm-key').placeholder = llm.api_key_set ? '••••••••  (saved — leave blank to keep)' : 'paste your API key';
+    refreshAiBadge();
+  });
+
+  document.getElementById('test-llm').addEventListener('click', async (e) => {
+    const out = document.getElementById('llm-test-result');
+    const detail = document.getElementById('llm-test-detail');
+    e.target.disabled = true;
+    out.textContent = 'Testing…'; out.className = 'text-sm text-slate-500';
+    detail.classList.add('hidden');
+    try {
+      const r = await api('/api/llm/test', { method: 'POST' });
+      out.textContent = r.ok ? `✅ ${r.provider} / ${r.model} works` : `❌ failed`;
+      out.className = `text-sm ${r.ok ? 'text-emerald-700' : 'text-red-600'}`;
+      detail.textContent = r.detail;
+      detail.classList.remove('hidden');
+    } catch (err) {
+      out.textContent = `❌ ${err.message}`; out.className = 'text-sm text-red-600';
+    } finally {
+      e.target.disabled = false;
+    }
   });
 
   document.getElementById('save-agency').addEventListener('click', async () => {

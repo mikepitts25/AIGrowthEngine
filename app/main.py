@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import ai, business_finder, lead_finder
+from . import ai, business_finder, lead_finder, llm
 from .database import (
     get_agency_profile, get_db, get_profile, init_db,
     save_agency_profile, save_profile,
@@ -62,6 +62,13 @@ class AgencyDiscoverIn(BaseModel):
     cities: list[str] | None = None      # default: agency profile cities
     verticals: list[str] | None = None   # default: agency profile verticals
     min_score: int = 20
+
+
+class LlmConfigIn(BaseModel):
+    provider: str = "anthropic"
+    model: str = ""
+    api_key: str = ""    # empty = keep the currently stored key
+    base_url: str = ""
 
 
 class LeadIn(BaseModel):
@@ -129,6 +136,7 @@ def read_settings():
         "profile": get_profile(),
         "agency": get_agency_profile(),
         "ai_enabled": ai.ai_available(),
+        "llm": llm.status(),  # api key never included — only api_key_set
         "google_places_enabled": business_finder.google_places_enabled(),
     }
 
@@ -143,6 +151,31 @@ def write_settings(profile: ProfileIn):
 def write_agency_settings(profile: AgencyProfileIn):
     save_agency_profile(profile.model_dump())
     return {"ok": True}
+
+
+@app.put("/api/settings/llm")
+def write_llm_settings(body: LlmConfigIn):
+    if body.provider not in llm.PROVIDERS:
+        raise HTTPException(400, f"provider must be one of {list(llm.PROVIDERS)}")
+    cfg = body.model_dump()
+    if not cfg["api_key"]:
+        # Empty key in the form means "keep what I already saved" —
+        # unless the provider changed, in which case the old key is wrong anyway.
+        old = llm.get_llm_config()
+        if old["provider"] == cfg["provider"]:
+            cfg["api_key"] = old.get("api_key", "")
+    llm.save_llm_config(cfg)
+    return {"ok": True, "llm": llm.status()}
+
+
+@app.post("/api/llm/test")
+def test_llm():
+    ok, detail = llm.try_complete(
+        system="You are a connection test. Reply with a single short sentence.",
+        user="Say hello and name yourself in under 15 words.",
+        max_tokens=1024,
+    )
+    return {"ok": ok, "detail": detail, **{k: llm.status()[k] for k in ("provider", "model")}}
 
 
 # ------------------------------------------------------------- leads
