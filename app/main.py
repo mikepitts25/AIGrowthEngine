@@ -18,8 +18,9 @@ from pydantic import BaseModel
 
 from . import ai, business_finder, enrich, lead_finder, llm
 from .database import (
-    get_agency_profile, get_autopilot, get_db, get_profile, init_db,
-    save_agency_profile, save_autopilot, save_profile,
+    SECRET_KEYS, get_agency_profile, get_autopilot, get_db, get_profile,
+    init_db, save_agency_profile, save_autopilot, save_profile, save_secrets,
+    secrets_status,
 )
 
 
@@ -116,6 +117,13 @@ class AutopilotIn(BaseModel):
     interval_hours: int = 24
     sources: list[str] = ["osm", "google", "yelp"]
     enrich: bool = True
+
+
+class SecretsIn(BaseModel):
+    GOOGLE_PLACES_API_KEY: str = ""
+    YELP_API_KEY: str = ""
+    REDDIT_CLIENT_ID: str = ""
+    REDDIT_CLIENT_SECRET: str = ""
 
 
 class DraftIn(BaseModel):
@@ -215,6 +223,7 @@ def read_settings():
         "yelp_enabled": business_finder.yelp_enabled(),
         "bluesky_enabled": lead_finder.bluesky_enabled(),
         "reddit_oauth_enabled": lead_finder.reddit_oauth_enabled(),
+        "secrets": secrets_status(),  # which keys are set; never the values
     }
 
 
@@ -228,6 +237,12 @@ def write_settings(profile: ProfileIn):
 def write_agency_settings(profile: AgencyProfileIn):
     save_agency_profile(profile.model_dump())
     return {"ok": True}
+
+
+@app.put("/api/settings/secrets")
+def write_secrets(body: SecretsIn):
+    save_secrets(body.model_dump())
+    return {"ok": True, "secrets": secrets_status()}
 
 
 @app.put("/api/settings/llm")

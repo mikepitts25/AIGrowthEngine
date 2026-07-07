@@ -10,11 +10,12 @@ from the Colibri Code cold-call script: no website, no listed evening or
 weekend hours, a small review footprint. Those are the owners losing jobs
 to voicemail.
 """
-import os
 import re
 import time
 
 import httpx
+
+from .database import get_secret
 
 USER_AGENT = "AIGrowthEngine/1.0 (local business discovery; respectful, low volume)"
 
@@ -52,11 +53,11 @@ YELP_CATEGORIES = {
 
 
 def google_places_enabled() -> bool:
-    return bool(os.environ.get("GOOGLE_PLACES_API_KEY"))
+    return bool(get_secret("GOOGLE_PLACES_API_KEY"))
 
 
 def yelp_enabled() -> bool:
-    return bool(os.environ.get("YELP_API_KEY"))
+    return bool(get_secret("YELP_API_KEY"))
 
 
 # ---------------------------------------------------------------- scoring
@@ -208,7 +209,7 @@ out center tags {limit};
 
 def search_google(city: str, verticals: list[str], limit: int = 20) -> list[dict]:
     """Google Places (New) text search — needs GOOGLE_PLACES_API_KEY."""
-    api_key = os.environ.get("GOOGLE_PLACES_API_KEY")
+    api_key = get_secret("GOOGLE_PLACES_API_KEY")
     if not api_key:
         return []
     field_mask = ",".join(f"places.{f}" for f in [
@@ -275,7 +276,7 @@ def search_google(city: str, verticals: list[str], limit: int = 20) -> list[dict
 
 def search_yelp(city: str, verticals: list[str], limit: int = 20) -> list[dict]:
     """Yelp Fusion search — needs YELP_API_KEY (free tier is plenty)."""
-    api_key = os.environ.get("YELP_API_KEY")
+    api_key = get_secret("YELP_API_KEY")
     if not api_key:
         return []
     results = []

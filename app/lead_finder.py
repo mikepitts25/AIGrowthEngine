@@ -3,11 +3,12 @@
 Both sources are free public JSON APIs — no keys required. Results are
 scored for buying intent so the hottest leads float to the top.
 """
-import os
 import re
 import time
 
 import httpx
+
+from .database import get_secret
 
 USER_AGENT = "AIGrowthEngine/1.0 (lead discovery; respectful, low volume)"
 BROWSER_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -18,7 +19,7 @@ _reddit_token: dict = {"value": "", "expires": 0.0}
 
 
 def reddit_oauth_enabled() -> bool:
-    return bool(os.environ.get("REDDIT_CLIENT_ID") and os.environ.get("REDDIT_CLIENT_SECRET"))
+    return bool(get_secret("REDDIT_CLIENT_ID") and get_secret("REDDIT_CLIENT_SECRET"))
 
 
 def bluesky_enabled() -> bool:
@@ -81,7 +82,7 @@ def _reddit_access_token() -> str:
         resp = httpx.post(
             "https://www.reddit.com/api/v1/access_token",
             data={"grant_type": "client_credentials"},
-            auth=(os.environ["REDDIT_CLIENT_ID"], os.environ["REDDIT_CLIENT_SECRET"]),
+            auth=(get_secret("REDDIT_CLIENT_ID"), get_secret("REDDIT_CLIENT_SECRET")),
             headers={"User-Agent": USER_AGENT}, timeout=15,
         )
         resp.raise_for_status()

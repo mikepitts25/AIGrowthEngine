@@ -179,6 +179,53 @@ def save_profile(profile: dict):
         )
 
 
+# API keys for optional data sources. Stored here (settings key 'secrets')
+# so they're configurable in the UI; an environment variable of the same
+# name still works and takes precedence for anyone who prefers it.
+SECRET_KEYS = ["GOOGLE_PLACES_API_KEY", "YELP_API_KEY", "REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"]
+
+
+def _stored_secrets() -> dict:
+    with get_db() as db:
+        row = db.execute("SELECT value FROM settings WHERE key = 'secrets'").fetchone()
+    if not row:
+        return {}
+    try:
+        return json.loads(row["value"])
+    except json.JSONDecodeError:
+        return {}
+
+
+def get_secret(name: str) -> str:
+    """Env var wins; otherwise the value saved in Settings."""
+    return os.environ.get(name) or _stored_secrets().get(name, "")
+
+
+def save_secrets(values: dict):
+    """Merge in provided keys; blank string means 'keep existing'."""
+    stored = _stored_secrets()
+    for k in SECRET_KEYS:
+        v = values.get(k)
+        if v:  # non-empty → set; empty/None → leave what's there
+            stored[k] = v.strip()
+    with get_db() as db:
+        db.execute(
+            "INSERT INTO settings (key, value) VALUES ('secrets', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (json.dumps(stored),),
+        )
+
+
+def secrets_status() -> dict:
+    """Which keys are set, and whether from env (locked) or the DB — never the values."""
+    stored = _stored_secrets()
+    out = {}
+    for k in SECRET_KEYS:
+        from_env = bool(os.environ.get(k))
+        out[k] = {"set": from_env or bool(stored.get(k)), "from_env": from_env}
+    return out
+
+
 def get_autopilot() -> dict:
     with get_db() as db:
         row = db.execute("SELECT value FROM settings WHERE key = 'autopilot'").fetchone()

@@ -643,7 +643,7 @@ function wirePostCard(p) {
 
 async function renderSettings() {
   const settings = await api('/api/settings');
-  const { profile, agency } = settings;
+  const { profile, agency, secrets } = settings;
   let llm = settings.llm;
   root.innerHTML = `
     <h2 class="text-2xl font-bold mb-2">Settings</h2>
@@ -679,6 +679,27 @@ async function renderSettings() {
             <label class="flex items-center gap-2 text-sm"><input type="checkbox" class="ag-vertical-set rounded" value="${k}" ${(agency.verticals || []).includes(k) ? 'checked' : ''}> ${v}</label>`).join('')}
         </div></div>
       <button id="save-agency" class="bg-slate-900 text-white px-5 py-2 rounded-lg text-sm font-semibold">Save agency profile</button>
+    </div>
+
+    <h3 class="text-lg font-bold mt-8 mb-2">🔑 Data Sources</h3>
+    <p class="text-slate-500 mb-4 text-sm">Optional API keys that unlock extra lead sources. Everything works without them (OpenStreetMap, Bluesky, and Hacker News need no keys) — these just add coverage. Stored locally; blank leaves a saved key untouched.</p>
+    <div class="bg-white rounded-xl shadow-sm p-5 space-y-4 max-w-2xl">
+      ${[
+        ['GOOGLE_PLACES_API_KEY', 'Google Places API key', 'Best business data (ratings, hours) — console.cloud.google.com'],
+        ['YELP_API_KEY', 'Yelp Fusion API key', 'Extra business source — free tier at yelp.com/developers'],
+        ['REDDIT_CLIENT_ID', 'Reddit client ID', 'Adds Reddit to course-lead search — create a "script" app at reddit.com/prefs/apps'],
+        ['REDDIT_CLIENT_SECRET', 'Reddit client secret', 'The secret from the same Reddit app'],
+      ].map(([k, label, hint]) => {
+        const st = secrets[k] || {};
+        return `<div>
+          <label class="block text-sm font-medium mb-1">${label}
+            ${st.set ? `<span class="text-emerald-600 text-xs font-normal">✓ set${st.from_env ? ' (from environment)' : ''}</span>` : '<span class="text-slate-400 text-xs font-normal">not set</span>'}</label>
+          <input id="sec-${k}" type="password" class="w-full border rounded-lg px-3 py-2 text-sm ${st.from_env ? 'bg-slate-100' : ''}"
+            ${st.from_env ? 'disabled placeholder="set via environment variable — takes precedence"' : `placeholder="${st.set ? '••••••••  (saved — leave blank to keep)' : 'paste key'}"`}>
+          <p class="text-xs text-slate-400 mt-0.5">${hint}</p>
+        </div>`;
+      }).join('')}
+      <button id="save-secrets" class="bg-slate-900 text-white px-5 py-2 rounded-lg text-sm font-semibold">Save keys</button>
     </div>
 
     <h3 class="text-lg font-bold mt-8 mb-2">🛸 Autopilot</h3>
@@ -722,6 +743,18 @@ async function renderSettings() {
       subreddits: lines('pf-subreddits'),
     }});
     toast('Profile saved');
+  });
+
+  // --- Data sources / secrets card ---
+  document.getElementById('save-secrets').addEventListener('click', async () => {
+    const body = {};
+    for (const k of ['GOOGLE_PLACES_API_KEY', 'YELP_API_KEY', 'REDDIT_CLIENT_ID', 'REDDIT_CLIENT_SECRET']) {
+      const el = document.getElementById('sec-' + k);
+      if (el && !el.disabled) body[k] = el.value.trim();
+    }
+    await api('/api/settings/secrets', { method: 'PUT', body });
+    toast('Source keys saved 🔑');
+    renderSettings();
   });
 
   // --- Autopilot card ---
