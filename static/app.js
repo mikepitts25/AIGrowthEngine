@@ -227,7 +227,7 @@ async function renderAgency() {
   const { agency, google_places_enabled, yelp_enabled, ai_enabled } = await api('/api/settings');
   root.innerHTML = `
     <h2 class="text-2xl font-bold mb-2">Agency Clients</h2>
-    <p class="text-slate-500 mb-6 text-sm">Find local home-service businesses that need <b>${esc(agency.agency_name || 'your agency')}</b>'s AI receptionist — scored for missed-call pain (no website, no evening/weekend hours, small review footprint). Then draft the cold email, SMS, or a call prep sheet.</p>
+    <p class="text-slate-500 mb-6 text-sm">Find local home-service businesses that need <b>${esc(agency.agency_name || 'your agency')}</b>'s staffed AI front desk — scored for ICP fit (has a website, 30-400 reviews \u2248 $1M-3M revenue, gaps in evening/weekend cover). Low scores usually mean too small: they will buy a $29 tool. Then draft the cold email, SMS, or a call prep sheet.</p>
     <div class="bg-white rounded-xl shadow-sm p-5 mb-6">
       <label class="block text-sm font-medium mb-1">Target cities <span class="text-slate-400 font-normal">(one per line — defaults from Settings)</span></label>
       <textarea id="ag-cities" rows="3" class="w-full border rounded-lg px-3 py-2 text-sm">${esc((agency.cities || []).join('\n'))}</textarea>

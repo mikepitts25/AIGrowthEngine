@@ -92,19 +92,38 @@ DEFAULT_AGENCY_PROFILE = {
     "agency_name": "Colibri Code LLC",
     "website": "",
     "service": (
-        "AI phone agent for home service businesses — answers calls 24/7, "
-        "sounds like a real person, books appointments straight onto the "
-        "calendar, and texts the owner the details. Bilingual English + Spanish."
+        "A staffed AI front desk for home-service contractors. Two halves: (1) the "
+        "agent answers every call and is configured to give Google's 'Ask for Me' "
+        "AI caller a structured quote - price band, next availability, warranty, "
+        "permits, haul-away - inside 90 seconds, so the homeowner's AI books them "
+        "instead of dialling the next shop; (2) a bilingual human reads, corrects "
+        "and escalates every overnight conversation before the owner wakes up. "
+        "Books into their real calendar (Jobber/Housecall Pro), handles follow-up, "
+        "and we own the A2P registration and AI-disclosure compliance."
     ),
-    "pricing": "$300–500/month — about the cost of one missed job; usually pays for itself in the first week",
-    "founders": "Mike (technical founder) & Paola (operations/sales)",
+    "pricing": (
+        "$2,500 setup + $1,000-1,200/month, or $1,500-1,800 with add-on SKUs. "
+        "Compare against a hire, never against an AI tool: an in-house CSR is "
+        "$3,300-4,600/month fully loaded; a call centre is $300-1,500/month; "
+        "Smith.ai is ~$300/month for 30 calls then $11.50 each."
+    ),
+    "founders": "Mike (build + sales) & Paola (client ops, QA, bilingual overnight desk)",
     "tone": (
-        "confident, plain-spoken, value-first — set a time expectation up front, "
-        "agitate the missed-call pain with vivid trade language (on a ladder, "
-        "under a house, after hours), never hard-sell"
+        "confident, plain-spoken, evidence-first. Lead with Google's AI caller "
+        "reaching home repair this summer and what happens if the shop cannot quote "
+        "in 90 seconds. NEVER open with missed-call statistics - every $79 tool uses "
+        "that line and it anchors us at their price. Use the prospect's OWN call log "
+        "or a recording of their own after-hours line as the proof. Concede the cheap "
+        "option openly, then explain what it does not do."
     ),
     "verticals": ["hvac", "plumber", "roofer", "electrician"],
-    "cities": ["Austin, TX", "San Antonio, TX"],
+    # Working window 17:00-23:00 CET = 08:00-14:00 PT, and Mountain/Pacific is where
+    # Spanish-speaking demand concentrates - timezone and language edge select the
+    # same prospect list.
+    "cities": [
+        "Phoenix, AZ", "Tucson, AZ", "Las Vegas, NV", "Denver, CO",
+        "Albuquerque, NM", "Sacramento, CA", "San Antonio, TX", "Houston, TX",
+    ],
 }
 
 # Columns added after the first release — applied to existing databases on boot.

@@ -5,7 +5,8 @@ Two sources:
 - Google Places (New) text search — richer data (ratings, review counts,
   hours); activates automatically when GOOGLE_PLACES_API_KEY is set.
 
-Businesses are scored for "missed-call pain" — the qualification signals
+Businesses are scored for FIT against the Aug-2026 ICP ($1M-3M, not on a
+bundled FSM AI tier) — the qualification signals
 from the Colibri Code cold-call script: no website, no listed evening or
 weekend hours, a small review footprint. Those are the owners losing jobs
 to voicemail.
@@ -85,35 +86,64 @@ def _covers_evening(hours: str) -> bool:
 
 def score_business(*, phone: str, website: str, hours: str,
                    rating: float | None, review_count: int | None) -> tuple[int, list[str]]:
-    """Score 0-100 for missed-call pain. Returns (score, reasons)."""
+    """Score 0-100 for FIT against the Aug-2026 ICP. Returns (score, reasons).
+
+    The ICP changed in Aug 2026. We are no longer hunting the smallest, most
+    obviously broken shops — those buy a $29-79 self-serve tool and are right to.
+    We want $1M-3M operators who are busy, reachable, and NOT already sitting on a
+    bundled FSM AI tier. Signals are weighted accordingly:
+
+      * a website is now a POSITIVE (a real business with a real front door),
+        where the old model rewarded its absence
+      * the review band moved up (30-400) to proxy $1M-3M rather than sub-$750K
+      * after-hours gaps still score, because that is what the overnight desk sells
+    """
     score, reasons = 0, []
+
     if phone:
-        score += 20
-        reasons.append("phone listed — cold-callable")
-    if not website:
-        score += 25
-        reasons.append("no website — likely no online booking, phone is their only funnel")
+        score += 15
+        reasons.append("phone listed - cold-callable")
+
+    # A website is a sign of a real operation. No website usually means too small
+    # for a $1,000/mo managed service - they are a $29-tool buyer.
+    if website:
+        score += 15
+        reasons.append("has a website - real operation, and we can read their setup")
+    else:
+        score -= 10
+        reasons.append("no website - likely under $750K, probably a $29-tool buyer (deprioritise)")
+
     if not hours:
-        score += 10
+        score += 5
         reasons.append("no listed hours")
     else:
         if not _covers_weekend(hours):
             score += 15
-            reasons.append("closed weekends — emergency calls go to voicemail")
+            reasons.append("closed weekends - emergency calls go unanswered (overnight desk value)")
         if not _covers_evening(hours):
-            score += 10
-            reasons.append("closes before 6pm — after-hours calls missed")
-    if review_count is not None:
-        if 3 <= review_count <= 100:
             score += 15
-            reasons.append(f"established but small ({review_count} reviews) — owner still answers the phone")
-        elif review_count < 3:
+            reasons.append("closes before 6pm - after-hours calls unanswered (overnight desk value)")
+
+    # Review count as a revenue proxy. 30-400 brackets the $1M-3M target band.
+    if review_count is not None:
+        if 30 <= review_count <= 400:
+            score += 30
+            reasons.append(f"{review_count} reviews - fits the $1M-3M target band")
+        elif 10 <= review_count < 30:
+            score += 10
+            reasons.append(f"{review_count} reviews - possibly under target size, qualify on the call")
+        elif review_count > 400:
             score += 5
-            reasons.append("very small footprint")
+            reasons.append(f"{review_count} reviews - may be too large (ServiceTitan/Avoca territory), qualify hard")
+        else:
+            score -= 5
+            reasons.append("very small footprint - likely below the ICP floor")
+
     if rating is not None and rating >= 4.0:
-        score += 5
-        reasons.append(f"good reputation ({rating}★) — busy enough to miss calls")
-    return min(score, 100), reasons
+        score += 10
+        reasons.append(f"{rating}\u2605 - busy enough that calls actually go unanswered")
+
+    return max(0, min(score, 100)), reasons
 
 
 # ---------------------------------------------------------------- OpenStreetMap

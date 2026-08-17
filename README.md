@@ -9,14 +9,14 @@ AI Income Blueprint project, but configurable for any business.
 
 AIGrowthEngine drives **two income streams from one dashboard**:
 **course sales** (find people who want to make money with AI, grow your
-audience) and an **AI agency** (find local businesses that need an AI
-receptionist and pitch them). Ships pre-configured for the
+audience) and an **AI agency** (find contractors who fit the $1M-3M ICP and pitch
+the staffed front desk — Google Ask-for-Me readiness plus a bilingual overnight desk). Ships pre-configured for the
 [AImoney](https://github.com/mikepitts25/AImoney) project and Colibri Code.
 
 | Feature | How it helps |
 |---|---|
 | 🔎 **Find Leads (course)** | Scans **Bluesky, Hacker News, and Reddit** for people asking about making money with AI. Bluesky and HN need no keys; Reddit uses OAuth when `REDDIT_CLIENT_ID`/`SECRET` are set. Scored 0–100 for buying intent. |
-| 🏢 **Agency Clients** | Finds local home-service businesses (HVAC, plumbing, roofing…) via **OpenStreetMap, Google Places, and Yelp**, scored for "missed-call pain" — the prospects your AI-receptionist service is built for. |
+| 🏢 **Agency Clients** | Finds local home-service businesses (HVAC, plumbing, roofing…) via **OpenStreetMap, Google Places, and Yelp**, scored for **ICP fit** — ≈$1M-3M revenue (30-400 reviews), has a website, gaps in evening/weekend cover. Deliberately deprioritises the tiny no-website shops: they buy a $29 self-serve tool. |
 | 🔬 **Lead enrichment** | Probes a business's website: pulls owner **email addresses**, detects online booking, flags dead sites — and re-scores pain automatically. |
 | 🧠 **AI qualification** | One click scores any lead's fit 0–100 with a rationale and the sharpest opener angle. |
 | ✨ **Outreach Studio** | Drafts personalized outreach — reply/DM for course leads; **email, SMS, call-prep sheet, or a full 3-email sequence** for agency leads. AI-powered with template fallback. You send it yourself. |
@@ -74,3 +74,27 @@ in the local SQLite database (`data/`, gitignored) — never in the repo.
 All functionality is also available as a JSON API (see `app/main.py`):
 `/api/dashboard`, `/api/leads/discover`, `/api/leads`, `/api/leads/{id}/draft`,
 `/api/content/generate`, `/api/posts`, `/api/settings`, `/api/leads/export.csv`.
+
+
+## Positioning note — August 2026
+
+The agency side of this tool was repositioned on 10 Aug 2026 after a market
+re-check. Three things changed and the defaults now reflect them:
+
+1. **Do not pitch "never miss a call."** That is the headline on Goodcall
+   ($79/mo), Rosie ($49/mo) and Allo (from $18/mo), and Zoom shipped a standalone
+   AI receptionist at $29.99/mo on 9 Jul 2026. Leading with it anchors you at
+   their price. Lead instead with **Google "Ask for Me"** — Google's AI now calls
+   local businesses for quotes, home repair included — and with the **bilingual
+   overnight desk**, which a self-serve tool cannot supply at all.
+2. **Price against a hire, never against an AI tool.** Only ~10% of SMBs spend
+   $250+/mo on anything labelled AI (Bluevine, 15 Jul 2026). The same contractor
+   pays $3,300-4,600/mo fully loaded for an in-house CSR. The default profile
+   carries those comparison figures so generated outreach uses them.
+3. **The ICP narrowed** to ~$1M-3M operators who are *not* on a bundled FSM AI
+   tier, in Mountain/Pacific and Spanish-heavy metros. Scoring was inverted
+   accordingly: a website is now a positive signal, and the review band moved to
+   30-400. Sub-30-review shops score low on purpose.
+
+Full reasoning lives in the AImoney repo's `agency-plan.html` under
+**Command Center → What You Actually Sell** and **Market Reality Check**.

@@ -94,7 +94,7 @@ def qualify_lead(agency_profile: dict, lead: dict) -> dict | None:
         system=(
             "You qualify sales leads for a small AI agency. Score how good a fit "
             "each business is for the service (0-100), where high fit = a real "
-            "service business likely losing revenue to missed calls with no modern "
+            "service business at $1M-3M revenue, not on a bundled FSM AI tier, whose phone cannot give an AI caller a structured quote and has no cover after hours, with no modern "
             "answering setup. Supply houses, wholesalers, franchises with call "
             "centers, and non-service businesses are low fit. Be blunt.\n\n"
             + _agency_context(agency_profile)
@@ -128,18 +128,18 @@ def qualify_lead(agency_profile: dict, lead: dict) -> dict | None:
 AGENCY_CHANNEL_SPECS = {
     "email": (
         "a cold email: subject line on the first line as 'Subject: …', then a 90-130 word body. "
-        "Open with the missed-call pain specific to their trade, one concrete gap you noticed about "
+        "Open with Google's AI caller reaching home repair and what it means for their shop (NOT missed-call statistics - every $79 tool uses those). Then one concrete gap you noticed about "
         "their business, the AI receptionist value in one plain sentence, price range anchored to "
         "one missed job, and a low-friction CTA offering a 15-minute demo where the AI calls them first"
     ),
     "sms": (
-        "a first-touch SMS, max 320 characters: who you are, the missed-call pain for their trade, "
+        "a first-touch SMS, max 320 characters: who you are, the Google AI-caller angle or a specific observation about their own line, "
         "the AI receptionist in a few words, and an easy yes/no question. No links, no pressure"
     ),
     "callprep": (
         "a cold-call prep sheet in plain text with these sections: LEAD SNAPSHOT (their details and "
         "the pain signals we spotted), OPENING HOOK (word-for-word, ~10 seconds, ask for 60 seconds), "
-        "PAIN AGITATION (vivid trade-specific missed-call scenario ending in an open question), "
+        "RELEVANCE (Google's AI caller now phones shops like theirs for quotes; what happens if nobody answers it properly in 90 seconds - end on an open question), "
         "SOLUTION TEASER (AI answers 24/7, sounds human, books to calendar, texts the owner), "
         "LIKELY OBJECTIONS (3-4 with word-for-word responses: not interested / already have a "
         "receptionist / cost / don't trust AI), and CLOSE (two-option scheduling ask)"
@@ -222,13 +222,13 @@ def draft_agency_outreach(profile: dict, lead: dict, channel: str) -> tuple[str,
     # Template fallbacks — modeled on the Colibri Code sales materials.
     name = profile.get("agency_name", "our agency")
     founders = profile.get("founders", "")
-    pricing = profile.get("pricing", "$300–500/month")
+    pricing = profile.get("pricing", "$2,500 setup + $1,000-1,200/month")
     gap_line = f" (I noticed: {gaps[0]}.)" if gaps else ""
 
     if channel == "sms":
         content = (
             f"Hi, this is {founders.split('(')[0].strip() or 'Mike'} with {name} — we help {trade} "
-            f"companies in {city} stop losing jobs to missed calls. Our AI phone agent answers 24/7, "
+            f"companies in {city} get booked by Google's new AI caller instead of losing the job to the next shop. Our staffed front desk answers 24/7, quotes in under 90 seconds, "
             f"sounds like a real person, and books the job onto your calendar. 15-min demo where the "
             f"AI calls YOU first — worth a look?"
         )
@@ -270,7 +270,7 @@ def draft_agency_outreach(profile: dict, lead: dict, channel: str) -> tuple[str,
         first = founders.split("(")[0].strip() or "Mike"
         content = (
             f"EMAIL 1 — Day 0\n"
-            f"Subject: Quick question about missed calls at {business}\n\n"
+            f"Subject: Google's AI is calling shops like {business}\n\n"
             f"Hi there,\n\n"
             f"I work with {trade} companies in {city}, and the #1 thing I hear from owners is "
             f"losing jobs to calls that come in mid-job or after hours — by the time they call "
@@ -281,7 +281,7 @@ def draft_agency_outreach(profile: dict, lead: dict, channel: str) -> tuple[str,
             f"{first}, {name}\n\n"
             f"{'—' * 30}\n\n"
             f"EMAIL 2 — Day 3\n"
-            f"Subject: The math on one missed call\n\n"
+            f"Subject: What happens when an AI calls you for a quote\n\n"
             f"Hi again — quick one.\n\n"
             f"One of our {trade} clients figured they were missing 5-8 calls a week. Even if only "
             f"one of those was a real job, that's more than the service costs for the month.\n\n"
@@ -292,14 +292,14 @@ def draft_agency_outreach(profile: dict, lead: dict, channel: str) -> tuple[str,
             f"EMAIL 3 — Day 7\n"
             f"Subject: Closing the loop\n\n"
             f"Hi — I'll take the silence as 'not right now', which is completely fine.\n\n"
-            f"If missed calls ever start stinging (busy season has a way of doing that), the demo "
+            f"If Google's AI caller starts routing jobs to shops that answer it properly, the demo "
             f"offer stands: 15 minutes, the AI calls you, you decide. Either way, wishing you a "
             f"packed schedule.\n\n"
             f"{first}, {name}"
         )
     else:  # email
         content = (
-            f"Subject: Quick question about missed calls at {business}\n\n"
+            f"Subject: Google's AI is calling shops like {business}\n\n"
             f"Hi there,\n\n"
             f"I work with {trade} companies in {city}, and the #1 thing I keep hearing from "
             f"owners is that they lose jobs because calls come in while they're on a job or after "
