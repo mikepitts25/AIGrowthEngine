@@ -19,10 +19,15 @@ async function api(path, opts = {}) {
   return res.json();
 }
 
+// Layout classes are kept in one place so the toast keeps its mobile
+// full-width placement when the colour is swapped for the error variant.
+const TOAST_LAYOUT = 'fixed z-[60] text-white text-sm px-4 py-3 rounded-lg shadow-lg '
+  + 'left-3 right-3 bottom-3 text-center sm:left-auto sm:right-5 sm:bottom-5 sm:text-left';
+
 function toast(msg, isError = false) {
   const el = document.getElementById('toast');
   el.textContent = msg;
-  el.className = `fixed bottom-5 right-5 text-white text-sm px-4 py-2.5 rounded-lg shadow-lg ${isError ? 'bg-red-600' : 'bg-slate-900'}`;
+  el.className = `${TOAST_LAYOUT} ${isError ? 'bg-red-600' : 'bg-slate-900'}`;
   el.classList.remove('hidden');
   clearTimeout(el._t);
   el._t = setTimeout(() => el.classList.add('hidden'), 3500);
@@ -51,14 +56,44 @@ const PLATFORM_LABELS = { x: '𝕏 / Twitter', linkedin: 'LinkedIn', reddit: 'Re
 
 // ------------------------------------------------------------ navigation
 
+const sidebar = document.getElementById('sidebar');
+const navBackdrop = document.getElementById('nav-backdrop');
+const navToggle = document.getElementById('nav-toggle');
+
+const isDesktop = () => window.matchMedia('(min-width: 768px)').matches;
+
+function setDrawer(open) {
+  sidebar.classList.toggle('-translate-x-full', !open);
+  navBackdrop.classList.toggle('hidden', !open);
+  document.body.classList.toggle('drawer-open', open);
+  navToggle.setAttribute('aria-expanded', String(open));
+  // A closed drawer is only translated off-screen, so without this its buttons
+  // stay in the tab order. Never inert on desktop, where the sidebar is static.
+  sidebar.inert = !isDesktop() && !open;
+}
+
+navToggle.addEventListener('click', () => setDrawer(true));
+document.getElementById('nav-close').addEventListener('click', () => setDrawer(false));
+navBackdrop.addEventListener('click', () => setDrawer(false));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') setDrawer(false); });
+
+// Crossing the breakpoint re-resolves the drawer state: leaving mobile with it
+// open would otherwise strand the backdrop and scroll lock over the static
+// sidebar, and entering mobile needs the closed drawer made inert.
+window.matchMedia('(min-width: 768px)').addEventListener('change', () => setDrawer(false));
+
+setDrawer(false);   // establish the initial inert/aria state
+
 document.querySelectorAll('.nav-btn').forEach(btn => {
   btn.addEventListener('click', () => show(btn.dataset.view));
 });
 
 function show(view) {
   currentView = view;
+  setDrawer(false);   // a tap on a nav item should reveal the view it opened
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   ({ dashboard: renderDashboard, discover: renderDiscover, agency: renderAgency, leads: renderLeads, content: renderContent, settings: renderSettings }[view])();
+  window.scrollTo(0, 0);
 }
 
 async function refreshAiBadge() {
@@ -68,6 +103,10 @@ async function refreshAiBadge() {
     document.getElementById('ai-badge').innerHTML = ai_enabled
       ? `<span class="w-2 h-2 rounded-full bg-emerald-400"></span> AI: ${esc(label)}`
       : '<span class="w-2 h-2 rounded-full bg-amber-400"></span> AI: templates only <span class="text-slate-500">(configure in Settings)</span>';
+    // The sidebar badge is off-screen on a phone — mirror the state into the top bar.
+    document.getElementById('ai-badge-mobile').innerHTML = ai_enabled
+      ? `<span class="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>`
+      : `<span class="inline-block w-2 h-2 rounded-full bg-amber-400"></span>`;
   } catch {}
 }
 
@@ -96,9 +135,9 @@ async function renderDashboard() {
   const totalLeads = Object.values(lc).reduce((a, b) => a + b, 0);
   const ap = d.autopilot || {};
   root.innerHTML = `
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center justify-between gap-3 flex-wrap mb-6">
       <h2 class="text-2xl font-bold">Dashboard</h2>
-      <a href="/callsheet" target="_blank" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-semibold">🖨 Today's call sheet</a>
+      <a href="/callsheet" target="_blank" class="btn inline-flex items-center bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-semibold">🖨 Today's call sheet</a>
     </div>
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       ${stat('Total leads', totalLeads, `${lc.new || 0} new · ${lc.contacted || 0} contacted`)}
@@ -173,7 +212,7 @@ async function renderDiscover() {
         <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="src-hn" checked class="rounded"> Hacker News</label>
         <label class="flex items-center gap-2 text-sm ${reddit_oauth_enabled ? '' : 'opacity-60'}"><input type="checkbox" id="src-reddit" ${reddit_oauth_enabled ? 'checked' : ''} class="rounded"> Reddit ${reddit_oauth_enabled ? '' : '<span class="text-slate-400">(often 403s without REDDIT_CLIENT_ID)</span>'}</label>
         <label class="flex items-center gap-2 text-sm">Min score <input type="number" id="min-score" value="25" min="0" max="100" class="w-16 border rounded px-2 py-1"></label>
-        <button id="run-discover" class="ml-auto bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">🔎 Discover leads</button>
+        <button id="run-discover" class="w-full sm:w-auto sm:ml-auto bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold">🔎 Discover leads</button>
       </div>
     </div>
     <div class="bg-white rounded-xl shadow-sm p-4 mb-6 flex items-center gap-2 flex-wrap">
@@ -245,7 +284,7 @@ async function renderAgency() {
           <input type="checkbox" id="ag-src-yelp" ${yelp_enabled ? 'checked' : 'disabled'} class="rounded"> Yelp
           ${yelp_enabled ? '' : '<span class="text-slate-400">(set YELP_API_KEY)</span>'}</label>
         <label class="flex items-center gap-2 text-sm">Min score <input type="number" id="ag-min-score" value="30" min="0" max="100" class="w-16 border rounded px-2 py-1"></label>
-        <button id="run-agency" class="ml-auto bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">🏢 Find businesses</button>
+        <button id="run-agency" class="w-full sm:w-auto sm:ml-auto bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold">🏢 Find businesses</button>
       </div>
     </div>
     <div class="bg-white rounded-xl shadow-sm p-4 mb-6 flex items-center gap-2 flex-wrap">
@@ -317,10 +356,10 @@ async function renderLeads(filter = '', kind = '') {
       onclick="renderLeads('${filter}', '${k}')">${label}</button>`).join('');
 
   root.innerHTML = `
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
       <h2 class="text-2xl font-bold">Leads <span class="text-slate-400 text-lg">(${leads.length})</span></h2>
       <div class="flex gap-2">
-        <a href="/api/leads/export.csv" class="bg-white border px-3 py-1.5 rounded-lg text-sm hover:bg-slate-50">⬇ Export CSV</a>
+        <a href="/api/leads/export.csv" class="btn inline-flex items-center bg-white border px-3 py-1.5 rounded-lg text-sm hover:bg-slate-50">⬇ Export CSV</a>
         <button id="add-lead" class="bg-slate-900 text-white px-3 py-1.5 rounded-lg text-sm">+ Add manually</button>
       </div>
     </div>
@@ -343,11 +382,11 @@ async function renderLeads(filter = '', kind = '') {
     const f = document.getElementById('lead-form');
     f.classList.remove('hidden');
     f.innerHTML = `
-      <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50" id="modal-bg">
-        <div class="bg-white rounded-xl p-6 w-full max-w-md shadow-xl" onclick="event.stopPropagation()">
+      <div class="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-3 sm:p-4" id="modal-bg">
+        <div class="bg-white rounded-xl p-5 sm:p-6 w-full max-w-md shadow-xl max-h-[85vh] overflow-y-auto" onclick="event.stopPropagation()">
           <h3 class="font-semibold mb-3">Add lead</h3>
           <input id="ml-title" placeholder="Name / post title *" class="w-full border rounded-lg px-3 py-2 text-sm mb-2">
-          <input id="ml-url" placeholder="URL (profile, post, website)" class="w-full border rounded-lg px-3 py-2 text-sm mb-2">
+          <input id="ml-url" type="url" inputmode="url" placeholder="URL (profile, post, website)" class="w-full border rounded-lg px-3 py-2 text-sm mb-2">
           <input id="ml-community" placeholder="Where found (community, event…)" class="w-full border rounded-lg px-3 py-2 text-sm mb-2">
           <textarea id="ml-notes" placeholder="Notes / context" rows="3" class="w-full border rounded-lg px-3 py-2 text-sm mb-3"></textarea>
           <div class="flex justify-end gap-2">
@@ -382,8 +421,8 @@ function leadCard(l) {
   const bizChips = isBiz ? `
     <div class="flex flex-wrap gap-1.5 mt-1.5">
       ${l.vertical ? `<span class="px-2 py-0.5 rounded-full text-xs bg-indigo-100 text-indigo-800">${esc(VERTICAL_LABELS[l.vertical] || l.vertical)}</span>` : ''}
-      ${l.phone ? `<span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700">📞 ${esc(l.phone)}</span>` : ''}
-      ${l.email ? `<span class="px-2 py-0.5 rounded-full text-xs bg-sky-100 text-sky-800">✉️ ${esc(l.email)}</span>` : ''}
+      ${l.phone ? `<a href="tel:${esc(String(l.phone).replace(/[^0-9+]/g, ''))}" class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700 hover:bg-slate-200">📞 ${esc(l.phone)}</a>` : ''}
+      ${l.email ? `<a href="mailto:${esc(l.email)}" class="px-2 py-0.5 rounded-full text-xs bg-sky-100 text-sky-800 hover:bg-sky-200 break-all">✉️ ${esc(l.email)}</a>` : ''}
       ${l.website ? `<a href="${esc(l.website)}" target="_blank" class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700 hover:bg-slate-200">🌐 site</a>`
                   : '<span class="px-2 py-0.5 rounded-full text-xs bg-rose-100 text-rose-700">no website</span>'}
       ${meta.rating ? `<span class="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-800">⭐ ${meta.rating} (${meta.review_count ?? '?'})</span>` : ''}
@@ -401,45 +440,51 @@ function leadCard(l) {
   const nextChip = l.next_action_at
     ? `<p class="text-xs text-amber-700 mt-1.5">⏰ ${esc(l.next_action || 'follow up')} — ${esc(l.next_action_at)}</p>` : '';
   const draftBtns = isBiz ? `
-      <button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded-lg" data-id="${l.id}" data-channel="email">✉️ Email</button>
-      <button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded-lg" data-id="${l.id}" data-channel="sms">💬 SMS</button>
-      <button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded-lg" data-id="${l.id}" data-channel="callprep">📞 Call prep</button>
-      <button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded-lg" data-id="${l.id}" data-channel="sequence">📧 Sequence</button>
-      <button class="enrich-btn text-xs border px-2 py-1 rounded-lg hover:bg-slate-50" data-id="${l.id}" title="Probe website: emails, online booking, dead-site check">🔬</button>
-      <button class="qualify-btn text-xs border px-2 py-1 rounded-lg hover:bg-slate-50" data-id="${l.id}" title="AI fit score">🧠</button>`
-    : `<button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg" data-id="${l.id}">✨ Draft outreach</button>
-       <button class="qualify-btn text-xs border px-2 py-1 rounded-lg hover:bg-slate-50" data-id="${l.id}" title="AI fit score">🧠</button>`;
+      <button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-lg" data-id="${l.id}" data-channel="email">✉️ Email</button>
+      <button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-lg" data-id="${l.id}" data-channel="sms">💬 SMS</button>
+      <button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-lg" data-id="${l.id}" data-channel="callprep">📞 Call prep</button>
+      <button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-lg" data-id="${l.id}" data-channel="sequence">📧 Sequence</button>
+      <button class="enrich-btn text-xs border px-3 py-1 rounded-lg hover:bg-slate-50" data-id="${l.id}" title="Probe website: emails, online booking, dead-site check">🔬</button>
+      <button class="qualify-btn text-xs border px-3 py-1 rounded-lg hover:bg-slate-50" data-id="${l.id}" title="AI fit score">🧠</button>`
+    : `<button class="draft-btn text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-lg" data-id="${l.id}">✨ Draft outreach</button>
+       <button class="qualify-btn text-xs border px-3 py-1 rounded-lg hover:bg-slate-50" data-id="${l.id}" title="AI fit score">🧠</button>`;
+  // Under md the action column drops below the content instead of competing
+  // with it for width — on a phone the old side-by-side left the title ~90px.
   return `
   <div class="bg-white rounded-xl shadow-sm p-4" id="lead-${l.id}">
-    <div class="flex items-start gap-3">
-      ${scoreBadge(l.intent_score)}
-      <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-2 flex-wrap">
-          ${l.source_url ? `<a href="${esc(l.source_url)}" target="_blank" class="font-medium text-sm hover:text-emerald-600">${esc(l.title)}</a>`
-                         : `<span class="font-medium text-sm">${esc(l.title)}</span>`}
-          <span class="px-2 py-0.5 rounded-full text-xs ${STATUS_COLORS[l.status] || ''}">${l.status}</span>
+    <div class="md:flex md:items-start md:gap-3">
+      <div class="flex items-start gap-3 flex-1 min-w-0">
+        ${scoreBadge(l.intent_score)}
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            ${l.source_url ? `<a href="${esc(l.source_url)}" target="_blank" class="font-medium text-sm hover:text-emerald-600 break-words">${esc(l.title)}</a>`
+                           : `<span class="font-medium text-sm break-words">${esc(l.title)}</span>`}
+            <span class="px-2 py-0.5 rounded-full text-xs ${STATUS_COLORS[l.status] || ''}">${l.status}</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-0.5 break-words">${esc(l.community)}${l.author ? ' · ' + esc(l.author) : ''} · via ${esc(l.source)}</p>
+          ${bizChips}${personQual}
+          ${l.snippet ? `<p class="text-xs text-slate-600 mt-1.5 line-clamp-2">${esc(l.snippet)}</p>` : ''}
+          ${nextChip}
+          ${l.notes ? `<p class="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 mt-1.5 break-words">📝 ${esc(l.notes)}</p>` : ''}
         </div>
-        <p class="text-xs text-slate-500 mt-0.5">${esc(l.community)}${l.author ? ' · ' + esc(l.author) : ''} · via ${esc(l.source)}</p>
-        ${bizChips}${personQual}
-        ${l.snippet ? `<p class="text-xs text-slate-600 mt-1.5 line-clamp-2">${esc(l.snippet)}</p>` : ''}
-        ${nextChip}
-        ${l.notes ? `<p class="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 mt-1.5">📝 ${esc(l.notes)}</p>` : ''}
       </div>
-      <div class="flex flex-col items-end gap-1.5 shrink-0">
-        <select class="lead-status border rounded-lg px-2 py-1 text-xs" data-id="${l.id}">
+      <div class="flex flex-col gap-1.5 shrink-0 mt-3 md:mt-0 md:items-end pt-3 md:pt-0 border-t md:border-t-0">
+        <select class="lead-status border rounded-lg px-2 py-1 text-xs w-full md:w-auto" data-id="${l.id}">
           ${LEAD_STATUSES.map(s => `<option value="${s}" ${s === l.status ? 'selected' : ''}>${s}</option>`).join('')}
         </select>
-        <div class="flex gap-1 flex-wrap justify-end">
+        <div class="flex gap-1.5 flex-wrap md:justify-end">
           ${draftBtns}
-          <button class="na-btn text-xs border px-2 py-1 rounded-lg hover:bg-slate-50" data-id="${l.id}" title="Schedule next action">⏰</button>
-          <button class="del-btn text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg" data-id="${l.id}">🗑</button>
+          <button class="na-btn text-xs border px-2.5 py-1 rounded-lg hover:bg-slate-50" data-id="${l.id}" title="Schedule next action">⏰</button>
+          <button class="del-btn text-xs text-red-500 hover:bg-red-50 px-2.5 py-1 rounded-lg" data-id="${l.id}">🗑</button>
         </div>
       </div>
     </div>
-    <div class="na-row mt-2 hidden items-center gap-2">
-      <input class="na-text border rounded-lg px-2 py-1 text-xs flex-1" placeholder="next action (e.g. follow-up email #2)" value="${esc(l.next_action || '')}">
-      <input type="date" class="na-date border rounded-lg px-2 py-1 text-xs" value="${esc(l.next_action_at || '')}">
-      <button class="na-save text-xs bg-slate-900 text-white px-3 py-1 rounded-lg">Save</button>
+    <div class="na-row mt-2 hidden flex-col sm:flex-row sm:items-center gap-2">
+      <input class="na-text border rounded-lg px-2 py-1 text-xs flex-1 w-full" placeholder="next action (e.g. follow-up email #2)" value="${esc(l.next_action || '')}">
+      <div class="flex gap-2">
+        <input type="date" class="na-date border rounded-lg px-2 py-1 text-xs flex-1" value="${esc(l.next_action_at || '')}">
+        <button class="na-save text-xs bg-slate-900 text-white px-4 py-1 rounded-lg shrink-0">Save</button>
+      </div>
     </div>
     <div class="outreach-area mt-3 hidden" data-id="${l.id}"></div>
   </div>`;
@@ -536,7 +581,7 @@ async function renderContent() {
       <div class="flex flex-wrap items-center gap-4">
         ${Object.entries(PLATFORM_LABELS).map(([k, v]) => `
           <label class="flex items-center gap-2 text-sm"><input type="checkbox" class="platform rounded" value="${k}" ${k === 'x' || k === 'linkedin' ? 'checked' : ''}> ${v}</label>`).join('')}
-        <button id="gen" class="ml-auto bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">✨ Generate posts</button>
+        <button id="gen" class="w-full sm:w-auto sm:ml-auto bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold">✨ Generate posts</button>
       </div>
     </div>
     <div class="bg-white rounded-xl shadow-sm p-4 mb-6 flex items-center gap-3 flex-wrap">
@@ -599,7 +644,7 @@ function postCard(p) {
       <span class="font-semibold text-sm">${PLATFORM_LABELS[p.platform] || esc(p.platform)}</span>
       <span class="px-2 py-0.5 rounded-full text-xs ${statusColor}">${p.status}</span>
       ${p.generated_by === 'ai' ? '<span class="text-xs text-slate-400">🤖 Claude</span>' : '<span class="text-xs text-slate-400">📋 template</span>'}
-      <span class="text-xs text-slate-400 ml-auto">${esc(p.topic)}</span>
+      <span class="text-xs text-slate-400 w-full sm:w-auto sm:ml-auto break-words">${esc(p.topic)}</span>
     </div>
     <textarea rows="5" class="w-full text-sm border rounded-lg px-3 py-2 post-text">${esc(p.content)}${p.hashtags ? '\n\n' + esc(p.hashtags) : ''}</textarea>
     <div class="flex items-center gap-2 mt-2 flex-wrap">

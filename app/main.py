@@ -494,16 +494,21 @@ def callsheet(limit: int = 20):
         meta = json.loads(l.get("meta") or "{}")
         signals = "; ".join(meta.get("score_reasons", []))
         qual = meta.get("ai_qualification") or {}
+        phone = l.get("phone") or ""
+        dial = "".join(c for c in phone if c.isdigit() or c == "+")
+        phone_cell = f'<a class="call" href="tel:{e(dial)}">{e(phone)}</a>' if dial else "—"
         rows.append(f"""
         <tr>
           <td class="n">{i}</td>
-          <td><b>{e(l['title'])}</b><br><span class="sub">{e(l.get('vertical') or '')} · {e(l.get('city') or '')}</span></td>
-          <td class="phone">{e(l.get('phone') or '—')}<br><span class="sub">{e(l.get('email') or '')}</span></td>
-          <td class="score">{l['intent_score']}{f"<br><span class='sub'>AI fit {qual['fit_score']}</span>" if qual.get('fit_score') is not None else ''}</td>
-          <td class="sig">{e(signals) or '—'}{f"<br><i>{e(qual.get('opener_angle', ''))}</i>" if qual.get('opener_angle') else ''}</td>
+          <td data-label="Business"><b>{e(l['title'])}</b><br><span class="sub">{e(l.get('vertical') or '')} · {e(l.get('city') or '')}</span></td>
+          <td class="phone" data-label="Phone / email">{phone_cell}<br><span class="sub">{e(l.get('email') or '')}</span></td>
+          <td class="score" data-label="Score">{l['intent_score']}{f"<br><span class='sub'>AI fit {qual['fit_score']}</span>" if qual.get('fit_score') is not None else ''}</td>
+          <td class="sig" data-label="Signals &amp; angle">{e(signals) or '—'}{f"<br><i>{e(qual.get('opener_angle', ''))}</i>" if qual.get('opener_angle') else ''}</td>
           <td class="notes"></td>
         </tr>""")
-    doc = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>Call Sheet — {datetime.now():%Y-%m-%d}</title>
+    doc = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Call Sheet — {datetime.now():%Y-%m-%d}</title>
 <style>
   body {{ font: 13px/1.45 -apple-system, sans-serif; margin: 24px; color: #111; }}
   h1 {{ font-size: 20px; margin: 0 0 2px; }}
@@ -515,10 +520,32 @@ def callsheet(limit: int = 20):
   .phone {{ white-space: nowrap; }} .sub {{ color: #666; font-size: 11px; font-weight: 400; }}
   .sig {{ font-size: 12px; }} .notes {{ width: 130px; }}
   .script {{ background: #f8f8f8; border: 1px solid #ddd; padding: 10px 12px; margin: 14px 0; font-size: 12px; }}
+  a.call {{ color: #0a58ca; text-decoration: none; font-weight: 600; }}
+
+  /* Phone: the six-column grid cannot fit, so each prospect becomes a stacked
+     card. Headers are dropped and each cell is labelled from data-label. */
+  @media screen and (max-width: 700px) {{
+    body {{ margin: 12px; }}
+    thead {{ display: none; }}
+    table, tbody, tr, td {{ display: block; width: 100%; }}
+    tr {{ border: 1px solid #ccc; border-radius: 8px; margin: 0 0 10px; padding: 8px 10px; }}
+    td {{ border: none; padding: 3px 0; }}
+    /* Blank cells collapse, except the outcome box you write into on the call. */
+    td:empty:not(.notes) {{ display: none; }}
+    td[data-label]::before {{
+      content: attr(data-label); display: block;
+      font-size: 10px; text-transform: uppercase; color: #888; margin-top: 4px;
+    }}
+    .n {{ width: auto; color: #999; font-size: 11px; }}
+    .score {{ width: auto; }}
+    .notes {{ width: auto; min-height: 44px; border-bottom: 1px dashed #bbb; }}
+    .notes::before {{ content: "Outcome"; display: block; font-size: 10px;
+                      text-transform: uppercase; color: #888; }}
+  }}
   @media print {{ .noprint {{ display: none; }} body {{ margin: 8px; }} }}
 </style></head><body>
 <h1>📞 {e(agency.get('agency_name', 'Agency'))} — Call Sheet, {datetime.now():%A %b %d}</h1>
-<p class="hint">Top {len(leads)} uncontacted prospects by missed-call pain score. <a class="noprint" href="javascript:print()">Print</a></p>
+<p class="hint">Top {len(leads)} uncontacted prospects by ICP fit score. <a class="noprint" href="javascript:print()">Print</a></p>
 <div class="script"><b>Opening:</b> "Hey [first name], this is [Mike/Paola] with {e(agency.get('agency_name', ''))}. I'll be real quick — I work with [trade] companies in [city], and I had a quick question. Do you have 60 seconds?"
 &nbsp;·&nbsp; <b>Price:</b> {e(agency.get('pricing', ''))} &nbsp;·&nbsp; <b>Close:</b> "Would Tuesday or Thursday work better?"</div>
 <table><thead><tr><th></th><th>Business</th><th>Phone / Email</th><th>Score</th><th>Pain signals & angle</th><th>Outcome</th></tr></thead>

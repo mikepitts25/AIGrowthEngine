@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
   <title>AIGrowthEngine</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -11,37 +12,83 @@
     textarea { resize: vertical; }
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+    /* Respect the notch / home indicator on phones. */
+    .safe-l { padding-left: env(safe-area-inset-left); }
+    .safe-b { padding-bottom: env(safe-area-inset-bottom); }
+
+    /* Locks background scrolling while the nav drawer is open. */
+    body.drawer-open { overflow: hidden; }
+
+    @media (max-width: 767px) {
+      /* iOS Safari zooms the viewport when a focused field is under 16px.
+         Tailwind's text-sm (14px) triggers it on every input in the app. */
+      input:not([type="checkbox"]):not([type="radio"]), select, textarea {
+        font-size: 16px !important;
+      }
+      /* Thumb-sized tap targets. The UI is built from text-xs buttons that
+         land around 24px tall otherwise — unusable one-handed. Matching on
+         `rounded` picks out the real buttons and chips while leaving the
+         underlined text links that sit inside sentences inline. */
+      button[class*="rounded"], select, a.btn,
+      input[type="date"], input[type="datetime-local"], input[type="number"] {
+        min-height: 40px;
+      }
+    }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen">
+
+  <!-- Mobile top bar -->
+  <header class="md:hidden sticky top-0 z-30 bg-slate-900 text-white flex items-center gap-3 px-3 py-2.5 safe-l">
+    <button id="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="sidebar"
+            class="p-2 -ml-1 rounded-lg hover:bg-slate-800 text-xl leading-none">☰</button>
+    <h1 class="font-bold text-base leading-tight flex-1 min-w-0 truncate">
+      🚀 AIGrowth<span class="text-emerald-400">Engine</span>
+    </h1>
+    <span id="ai-badge-mobile" class="text-xs text-slate-400 shrink-0"></span>
+  </header>
+
   <div class="flex min-h-screen">
-    <!-- Sidebar -->
-    <aside class="w-56 bg-slate-900 text-slate-300 flex flex-col shrink-0">
-      <div class="px-5 py-5 border-b border-slate-800">
-        <h1 class="text-white font-bold text-lg leading-tight">🚀 AIGrowth<span class="text-emerald-400">Engine</span></h1>
-        <p class="text-xs text-slate-500 mt-1">Grow your business on autopilot</p>
+    <!-- Backdrop (mobile only, shown with the drawer) -->
+    <div id="nav-backdrop" class="hidden md:hidden fixed inset-0 bg-black/50 z-40"></div>
+
+    <!-- Sidebar: off-canvas drawer under md, static column from md up -->
+    <aside id="sidebar"
+           class="fixed md:static inset-y-0 left-0 z-50 w-64 md:w-56 bg-slate-900 text-slate-300
+                  flex flex-col shrink-0 safe-l
+                  -translate-x-full md:translate-x-0 transition-transform duration-200 ease-out">
+      <div class="px-5 py-5 border-b border-slate-800 flex items-start gap-2">
+        <div class="flex-1 min-w-0">
+          <h1 class="text-white font-bold text-lg leading-tight">🚀 AIGrowth<span class="text-emerald-400">Engine</span></h1>
+          <p class="text-xs text-slate-500 mt-1">Grow your business on autopilot</p>
+        </div>
+        <button id="nav-close" aria-label="Close menu"
+                class="md:hidden text-slate-400 hover:text-white px-2 -mr-2 text-xl leading-none">×</button>
       </div>
-      <nav class="flex-1 py-3 space-y-1 px-2">
-        <button data-view="dashboard" class="nav-btn w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800 text-sm">📊 Dashboard</button>
-        <button data-view="discover"  class="nav-btn w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800 text-sm">🔎 Find Leads</button>
-        <button data-view="agency"    class="nav-btn w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800 text-sm">🏢 Agency Clients</button>
-        <button data-view="leads"     class="nav-btn w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800 text-sm">👥 Leads</button>
-        <button data-view="content"   class="nav-btn w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800 text-sm">✍️ Content Studio</button>
-        <button data-view="settings"  class="nav-btn w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800 text-sm">⚙️ Settings</button>
+      <nav class="flex-1 py-3 space-y-1 px-2 overflow-y-auto">
+        <button data-view="dashboard" class="nav-btn w-full text-left px-3 py-2.5 rounded-lg hover:bg-slate-800 text-sm">📊 Dashboard</button>
+        <button data-view="discover"  class="nav-btn w-full text-left px-3 py-2.5 rounded-lg hover:bg-slate-800 text-sm">🔎 Find Leads</button>
+        <button data-view="agency"    class="nav-btn w-full text-left px-3 py-2.5 rounded-lg hover:bg-slate-800 text-sm">🏢 Agency Clients</button>
+        <button data-view="leads"     class="nav-btn w-full text-left px-3 py-2.5 rounded-lg hover:bg-slate-800 text-sm">👥 Leads</button>
+        <button data-view="content"   class="nav-btn w-full text-left px-3 py-2.5 rounded-lg hover:bg-slate-800 text-sm">✍️ Content Studio</button>
+        <button data-view="settings"  class="nav-btn w-full text-left px-3 py-2.5 rounded-lg hover:bg-slate-800 text-sm">⚙️ Settings</button>
       </nav>
-      <div class="px-5 py-4 border-t border-slate-800 text-xs">
+      <div class="px-5 py-4 border-t border-slate-800 text-xs safe-b">
         <span id="ai-badge" class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-slate-600"></span> AI: checking…</span>
       </div>
     </aside>
 
     <!-- Main -->
-    <main class="flex-1 p-6 lg:p-8 overflow-x-hidden">
+    <main class="flex-1 min-w-0 p-4 md:p-6 lg:p-8 overflow-x-hidden safe-b">
       <div id="view-root" class="max-w-5xl mx-auto"></div>
     </main>
   </div>
 
-  <!-- Toast -->
-  <div id="toast" class="fixed bottom-5 right-5 hidden bg-slate-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-lg"></div>
+  <!-- Toast: full-width above the thumb on mobile, corner chip on desktop -->
+  <div id="toast" class="fixed z-[60] hidden bg-slate-900 text-white text-sm px-4 py-3 rounded-lg shadow-lg
+                         left-3 right-3 bottom-3 text-center
+                         sm:left-auto sm:right-5 sm:bottom-5 sm:text-left"></div>
 
   <script src="/static/app.js"></script>
 </body>
