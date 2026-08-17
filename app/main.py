@@ -4,6 +4,7 @@ Run with:  uvicorn app.main:app --reload
 """
 import asyncio
 import csv
+import hashlib
 import html as html_mod
 import io
 import json
@@ -12,7 +13,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -755,9 +756,46 @@ def delete_post(post_id: int):
 
 # ------------------------------------------------------------- frontend
 
+@app.middleware("http")
+async def _static_cache_headers(request, call_next):
+    """Make static caching explicit instead of leaving it to browser heuristics.
+
+    A versioned URL is immutable and can be cached hard. An unversioned one
+    comes from an older cached shell, so it must revalidate — otherwise a
+    phone keeps replaying a stale bundle and the UI silently half-works.
+    """
+    response = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = (
+            "public, max-age=31536000, immutable" if request.query_params.get("v")
+            else "no-cache, must-revalidate"
+        )
+    return response
+
+
+def _asset_version(filename: str) -> str:
+    """Short content hash used to bust caches for a static asset."""
+    try:
+        with open(os.path.join(STATIC_DIR, filename), "rb") as fh:
+            return hashlib.md5(fh.read()).hexdigest()[:8]
+    except OSError:
+        return "0"
+
+
 @app.get("/")
 def index():
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+    """Serve the shell with versioned asset URLs.
+
+    StaticFiles sends no Cache-Control, so browsers fall back to heuristic
+    caching and a phone can keep running an old app.js against new markup —
+    the UI half-updates and controls silently stop working. Stamping the
+    content hash onto the URL makes a changed asset a new URL, and marking
+    the shell no-cache means that new URL is actually seen.
+    """
+    with open(os.path.join(STATIC_DIR, "index.html"), encoding="utf-8") as fh:
+        html = fh.read()
+    html = html.replace("/static/app.js", f"/static/app.js?v={_asset_version('app.js')}")
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache, must-revalidate"})
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
