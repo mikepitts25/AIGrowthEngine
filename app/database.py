@@ -86,35 +86,38 @@ DEFAULT_PROFILE = {
     ],
 }
 
-# Agency mode: Colibri Code sells AI receptionists to home service businesses.
+# Agency mode: Colibri Code runs the Overnight Front Office for home service businesses.
 # Seeded from the sales materials in the AImoney course repo — edit in Settings.
 DEFAULT_AGENCY_PROFILE = {
     "agency_name": "Colibri Code LLC",
     "website": "",
     "service": (
-        "A staffed AI front desk for home-service contractors. Two halves: (1) the "
-        "agent answers every call and is configured to give Google's 'Ask for Me' "
-        "AI caller a structured quote - price band, next availability, warranty, "
-        "permits, haul-away - inside 90 seconds, so the homeowner's AI books them "
-        "instead of dialling the next shop; (2) a bilingual human reads, corrects "
-        "and escalates every overnight conversation before the owner wakes up. "
-        "Books into their real calendar (Jobber/Housecall Pro), handles follow-up, "
-        "and we own the A2P registration and AI-disclosure compliance."
+        "The Overnight Front Office for home-service contractors. Every call, text and "
+        "AI-caller inquiry from 5pm to 7am is answered - by the shop's existing AI "
+        "receptionist (Jobber, Housecall Pro, Zoom, Quo), which we configure and run, or by "
+        "ours - and a bilingual human reads, corrects, tags and escalates every overnight "
+        "conversation, then sends the owner a sorted Morning Board (book today / call back / "
+        "quote sent / spam) before 7am Pacific. Spanish-speaking customers get a call back "
+        "from a person. Google discontinued Business Profile call history in 2026, so the "
+        "board is the owner's record. Includes calendar write-back, follow-up texts, review "
+        "requests, Business Profile facts kept current for Google's AI caller, and the A2P "
+        "and AI-disclosure compliance."
     ),
     "pricing": (
-        "$2,500 setup + $1,000-1,200/month, or $1,500-1,800 with add-on SKUs. "
-        "Compare against a hire, never against an AI tool: an in-house CSR is "
-        "$3,300-4,600/month fully loaded; a call centre is $300-1,500/month; "
-        "Smith.ai is ~$300/month for 30 calls then $11.50 each."
+        "Front Office Bundle: $2,500 setup + $1,000/month launch ($1,200 once we have a case "
+        "study); Scale $1,500+/month adds Spanish callbacks and quarterly reactivation; 7-day "
+        "paid pilot $250, credited to setup. Compare against a hire, never against software: "
+        "a night/weekend CSR is $3,300-4,600/month fully loaded, a human answering service "
+        "$300-1,500/month and it only takes messages."
     ),
-    "founders": "Mike (build + sales) & Paola (client ops, QA, bilingual overnight desk)",
+    "founders": "Mike (build + sales) & Paola (client ops, Morning Board, bilingual callbacks)",
     "tone": (
-        "confident, plain-spoken, evidence-first. Lead with Google's AI caller "
-        "reaching home repair this summer and what happens if the shop cannot quote "
-        "in 90 seconds. NEVER open with missed-call statistics - every $79 tool uses "
-        "that line and it anchors us at their price. Use the prospect's OWN call log "
-        "or a recording of their own after-hours line as the proof. Concede the cheap "
-        "option openly, then explain what it does not do."
+        "confident, plain-spoken, evidence-first. Lead with what happens to THEIR calls after "
+        "5pm - the timestamp and recording of our own after-hours test call beats any "
+        "statistic. NEVER open with 'AI' or 'never miss a call': every $15-29 tool says it and "
+        "it anchors us at their price. If they already have an AI receptionist, say 'keep it, "
+        "we run it'. Concede the cheap option openly, then explain what it does not do: nobody "
+        "reads its conversations before the owner is up."
     ),
     "verticals": ["hvac", "plumber", "roofer", "electrician"],
     # Working window 17:00-23:00 CET = 08:00-14:00 PT, and Mountain/Pacific is where
@@ -125,6 +128,22 @@ DEFAULT_AGENCY_PROFILE = {
         "Albuquerque, NM", "Sacramento, CA", "San Antonio, TX", "Houston, TX",
     ],
 }
+
+
+# Fingerprint of the Aug-2026 default "service" text. A stored profile that
+# still carries it was never edited by the user, so init_db upgrades its
+# service/pricing/tone/founders to the current defaults.
+_AUG_2026_SERVICE = (
+        "A staffed AI front desk for home-service contractors. Two halves: (1) the "
+        "agent answers every call and is configured to give Google's 'Ask for Me' "
+        "AI caller a structured quote - price band, next availability, warranty, "
+        "permits, haul-away - inside 90 seconds, so the homeowner's AI books them "
+        "instead of dialling the next shop; (2) a bilingual human reads, corrects "
+        "and escalates every overnight conversation before the owner wakes up. "
+        "Books into their real calendar (Jobber/Housecall Pro), handles follow-up, "
+        "and we own the A2P registration and AI-disclosure compliance."
+)
+_PROFILE_UPGRADE_FIELDS = ("service", "pricing", "tone", "founders")
 
 # Columns added after the first release — applied to existing databases on boot.
 _LEAD_MIGRATIONS = {
@@ -163,12 +182,18 @@ def init_db():
                 "INSERT INTO settings (key, value) VALUES ('profile', ?)",
                 (json.dumps(DEFAULT_PROFILE),),
             )
-        cur = db.execute("SELECT value FROM settings WHERE key = 'agency_profile'")
-        if cur.fetchone() is None:
+        row = db.execute("SELECT value FROM settings WHERE key = 'agency_profile'").fetchone()
+        if row is None:
             db.execute(
                 "INSERT INTO settings (key, value) VALUES ('agency_profile', ?)",
                 (json.dumps(DEFAULT_AGENCY_PROFILE),),
             )
+        else:
+            stored = json.loads(row["value"])
+            if stored.get("service") == _AUG_2026_SERVICE:
+                stored.update({k: DEFAULT_AGENCY_PROFILE[k] for k in _PROFILE_UPGRADE_FIELDS})
+                db.execute("UPDATE settings SET value = ? WHERE key = 'agency_profile'",
+                           (json.dumps(stored),))
 
 
 @contextmanager

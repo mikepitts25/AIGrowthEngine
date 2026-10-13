@@ -14,6 +14,15 @@ from .database import get_db
 
 USER_AGENT = "Mozilla/5.0 (compatible; AIGrowthEngine/1.0; local business research)"
 
+# Field-service platforms that now bundle (or sell) their own AI receptionist.
+# Oct 2026: finding one is NOT a disqualifier - it makes the lead a
+# bring-your-own candidate ("keep it, we run it and review it overnight").
+FSM_SIGNALS = {
+    "jobber": "Jobber", "getjobber": "Jobber",
+    "housecallpro": "Housecall Pro", "housecall pro": "Housecall Pro",
+    "servicetitan": "ServiceTitan",
+}
+
 # Presence of any of these = they already take bookings online (less pain).
 BOOKING_SIGNALS = [
     "calendly", "housecallpro", "housecall pro", "servicetitan", "jobber",
@@ -44,7 +53,7 @@ def _extract_emails(html: str) -> list[str]:
 def probe_website(url: str) -> dict:
     """Fetch the site (+ /contact if easy) and report what we learn."""
     result = {
-        "reachable": False, "has_booking": False, "has_chat": False,
+        "reachable": False, "has_booking": False, "has_chat": False, "fsm": "",
         "emails": [], "checked_url": url,
     }
     if not url.startswith(("http://", "https://")):
@@ -73,6 +82,7 @@ def probe_website(url: str) -> dict:
     html = "\n".join(pages).lower()
     result["has_booking"] = any(s in html for s in BOOKING_SIGNALS)
     result["has_chat"] = any(s in html for s in CHAT_SIGNALS)
+    result["fsm"] = next((name for sig, name in FSM_SIGNALS.items() if sig in html), "")
     result["emails"] = _extract_emails("\n".join(pages))
     return result
 
@@ -93,13 +103,18 @@ def enrich_lead(lead: dict) -> dict | None:
         probe = probe_website(website)
         meta["enrichment"] = probe
         if not probe["reachable"]:
-            score += 20
-            reasons.append("website unreachable — the phone is their entire funnel")
+            score += 5
+            reasons.append("website unreachable — the phone is their entire funnel (check they're big enough)")
         elif not probe["has_booking"]:
             score += 15
             reasons.append("website has NO online booking — callers who can't get through book a competitor")
         else:
-            reasons.append("has online booking — pitch after-hours phone coverage instead")
+            reasons.append("has online booking — pitch the overnight board for calls, not booking")
+        if probe.get("fsm") == "ServiceTitan":
+            reasons.append("runs ServiceTitan — often a $3M+ shop with CSRs; qualify size before pitching")
+        elif probe.get("fsm"):
+            score += 5
+            reasons.append(f"runs {probe['fsm']} — may already have its AI receptionist: pitch 'keep it, we run it and review it overnight'")
         if probe["emails"] and not email:
             email = probe["emails"][0]
             reasons.append(f"email found on site: {email}")

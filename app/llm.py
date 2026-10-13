@@ -26,7 +26,7 @@ except ImportError:
 PROVIDERS = {
     "anthropic": {
         "label": "Anthropic (Claude)",
-        "default_model": "claude-opus-4-8",
+        "default_model": "claude-opus-5-5",
         "env_key": "ANTHROPIC_API_KEY",
         "base_url": None,
     },
@@ -67,6 +67,12 @@ PROVIDERS = {
         "base_url": "",
     },
 }
+
+# Models that accept server-side refusal fallbacks (`fallbacks: "default"`):
+# a safety decline is re-run on Anthropic's recommended substitute inside the
+# same call instead of coming back empty.
+_FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5"}
+_FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 DEFAULT_LLM_CONFIG = {"provider": "anthropic", "model": "", "api_key": "", "base_url": ""}
 
@@ -195,7 +201,12 @@ def _complete_anthropic(r: dict, system: str, user: str,
     }
     if json_schema is not None:
         kwargs["output_config"] = {"format": {"type": "json_schema", "schema": json_schema}}
-    resp = client.messages.create(**kwargs)
+    if r["model"] in _FALLBACK_MODELS:
+        resp = client.beta.messages.create(betas=[_FALLBACK_BETA], fallbacks="default", **kwargs)
+    else:
+        resp = client.messages.create(**kwargs)
+    if resp.stop_reason == "refusal":
+        return None  # whole chain declined - caller falls back to templates
     return next((b.text for b in resp.content if b.type == "text"), "").strip() or None
 
 

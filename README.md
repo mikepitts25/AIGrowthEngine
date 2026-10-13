@@ -10,14 +10,15 @@ AI Income Blueprint project, but configurable for any business.
 AIGrowthEngine drives **two income streams from one dashboard**:
 **course sales** (find people who want to make money with AI, grow your
 audience) and an **AI agency** (find contractors who fit the $1M-3M ICP and pitch
-the staffed front desk — Google Ask-for-Me readiness plus a bilingual overnight desk). Ships pre-configured for the
+the Overnight Front Office — a bilingual human reviews every overnight call and sends
+the owner a sorted Morning Board, on their existing AI receptionist or ours). Ships pre-configured for the
 [AImoney](https://github.com/mikepitts25/AImoney) project and Colibri Code.
 
 | Feature | How it helps |
 |---|---|
 | 🔎 **Find Leads (course)** | Scans **Bluesky, Hacker News, and Reddit** for people asking about making money with AI. Bluesky and HN need no keys; Reddit uses OAuth when `REDDIT_CLIENT_ID`/`SECRET` are set. Scored 0–100 for buying intent. |
 | 🏢 **Agency Clients** | Finds local home-service businesses (HVAC, plumbing, roofing…) via **OpenStreetMap, Google Places, and Yelp**, scored for **ICP fit** — ≈$1M-3M revenue (30-400 reviews), has a website, gaps in evening/weekend cover. Deliberately deprioritises the tiny no-website shops: they buy a $29 self-serve tool. |
-| 🔬 **Lead enrichment** | Probes a business's website: pulls owner **email addresses**, detects online booking, flags dead sites — and re-scores pain automatically. |
+| 🔬 **Lead enrichment** | Probes a business's website: pulls owner **email addresses**, detects online booking and the **field-service platform** (Jobber / Housecall Pro / ServiceTitan), flags dead sites — and re-scores automatically. Internal scoring notes never leak into outreach. |
 | 🧠 **AI qualification** | One click scores any lead's fit 0–100 with a rationale and the sharpest opener angle. |
 | ✨ **Outreach Studio** | Drafts personalized outreach — reply/DM for course leads; **email, SMS, call-prep sheet, or a full 3-email sequence** for agency leads. AI-powered with template fallback. You send it yourself. |
 | ⚡ **Bulk draft** | Draft outreach for the top 10 uncontacted leads in one click. |
@@ -45,7 +46,7 @@ model and API key, and hit **Test connection**:
 
 | Provider | Notes |
 |---|---|
-| Anthropic (Claude) | Default. Also picks up `ANTHROPIC_API_KEY` from the environment — get one at platform.claude.com |
+| Anthropic (Claude) | Default (`claude-opus-5-5`, with server-side refusal fallbacks). Also picks up `ANTHROPIC_API_KEY` from the environment — get one at platform.claude.com |
 | OpenAI / Google Gemini / OpenRouter / Groq | Paste an API key (env vars `OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `GROQ_API_KEY` also work) |
 | Ollama | Free, local, no key — install from ollama.com, `ollama pull llama3.2`, done |
 | Custom | Any OpenAI-compatible endpoint (LM Studio, Together, DeepSeek, vLLM…) — set the base URL |
@@ -76,7 +77,27 @@ All functionality is also available as a JSON API (see `app/main.py`):
 `/api/content/generate`, `/api/posts`, `/api/settings`, `/api/leads/export.csv`.
 
 
-## Positioning note — August 2026
+## Positioning note — October 2026
+
+Re-checked 13 Oct 2026; the defaults now reflect it (an unedited August agency
+profile is upgraded automatically on boot — an edited one is left alone):
+
+1. **Sell the Overnight Front Office, not the receptionist.** The AI answering is
+   a $15-29 commodity (Quo bundles one from ~$15/user; Jobber ~$29; Zoom $29.99)
+   and managed rivals list $297-789/mo. The product is the **Morning Board**: a
+   bilingual human reads every overnight conversation and sends the owner a sorted
+   list before 7am. Google discontinued Business Profile call history in 2026, so
+   the board is the owner's record.
+2. **Bring-your-own receptionist.** A prospect on Jobber / Housecall Pro / Zoom /
+   Quo is a lead, not a lost cause: "keep it, we run it." Enrichment now detects
+   the platform and the qualifier no longer penalises an existing AI tool.
+3. **"Ask for Me" is a hook, not the headline.** Google's AI caller spread (Gemini
+   "Call for Me" test, 24 Sep 2026) but every vendor now says "get ready for
+   Google's AI". It stays as one line in the audit.
+
+Pricing still follows the AImoney ladder (re-decided at the 15 Oct 2026 gate).
+
+## Positioning note — August 2026 (superseded where October differs)
 
 The agency side of this tool was repositioned on 10 Aug 2026 after a market
 re-check. Three things changed and the defaults now reflect them:

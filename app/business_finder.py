@@ -1,4 +1,4 @@
-"""Discover local home-service businesses that need an AI receptionist.
+"""Discover local home-service businesses that need an overnight front office.
 
 Two sources:
 - OpenStreetMap (Nominatim geocoding + Overpass API) — free, no key needed.
@@ -90,13 +90,15 @@ def score_business(*, phone: str, website: str, hours: str,
 
     The ICP changed in Aug 2026. We are no longer hunting the smallest, most
     obviously broken shops — those buy a $29-79 self-serve tool and are right to.
-    We want $1M-3M operators who are busy, reachable, and NOT already sitting on a
-    bundled FSM AI tier. Signals are weighted accordingly:
+    We want $1M-3M operators who are busy and reachable. Since Oct 2026 an
+    existing AI receptionist (Jobber, Housecall Pro, Zoom, Quo) is NOT a negative:
+    we run theirs and sell the overnight human review on top. Signals are
+    weighted accordingly:
 
       * a website is now a POSITIVE (a real business with a real front door),
         where the old model rewarded its absence
       * the review band moved up (30-400) to proxy $1M-3M rather than sub-$750K
-      * after-hours gaps still score, because that is what the overnight desk sells
+      * after-hours gaps still score, because that is what the Morning Board sells
     """
     score, reasons = 0, []
 
@@ -119,10 +121,10 @@ def score_business(*, phone: str, website: str, hours: str,
     else:
         if not _covers_weekend(hours):
             score += 15
-            reasons.append("closed weekends - emergency calls go unanswered (overnight desk value)")
+            reasons.append("closed weekends - emergency calls go unanswered (Morning Board value)")
         if not _covers_evening(hours):
             score += 15
-            reasons.append("closes before 6pm - after-hours calls unanswered (overnight desk value)")
+            reasons.append("closes before 6pm - after-hours calls unanswered (Morning Board value)")
 
     # Review count as a revenue proxy. 30-400 brackets the $1M-3M target band.
     if review_count is not None:
