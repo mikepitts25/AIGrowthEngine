@@ -10,8 +10,8 @@ AI Income Blueprint project, but configurable for any business.
 AIGrowthEngine drives **two income streams from one dashboard**:
 **course sales** (find people who want to make money with AI, grow your
 audience) and an **AI agency** (find contractors who fit the $1M-3M ICP and pitch
-the Overnight Front Office — a bilingual human reviews every overnight call and sends
-the owner a sorted Morning Board, on their existing AI receptionist or ours). Ships pre-configured for the
+the Booked-Job Desk — win-back campaigns to a shop's own past customers, sent from
+their own Jobber/Housecall Pro, paid per booked job). Ships pre-configured for the
 [AImoney](https://github.com/mikepitts25/AImoney) project and Colibri Code.
 
 | Feature | How it helps |
@@ -77,7 +77,23 @@ All functionality is also available as a JSON API (see `app/main.py`):
 `/api/content/generate`, `/api/posts`, `/api/settings`, `/api/leads/export.csv`.
 
 
-## Positioning note — October 2026
+## Positioning note — November 2026 (current)
+
+Rebuilt 17 Nov 2026 (see AImoney's `operating-plan.html`). The core offer moved
+from the overnight phone to **revenue recovery**: seasonal win-back campaigns to
+a shop's dormant customers, open-estimate follow-up and review requests, sent
+from the shop's own Jobber/Housecall Pro, approved by the owner, and paid
+**$75 per booked job** (pilot), then **$400/mo + $40 per booked job**. It is
+asynchronous work that fits a CET team, it doesn't compete with $29 AI
+receptionists, and the proof is the client's own job board.
+
+What changed in the tool: the qualifier and scorer favour an established
+customer base (30-400 reviews) and Jobber/Housecall Pro (+15 on enrichment).
+After-hours gaps are now a light add-on signal. Outreach leads with dormant
+customers and the seasonal campaign for the current month. An unedited
+August or October agency profile is upgraded automatically on boot.
+
+## Positioning note — October 2026 (superseded)
 
 Re-checked 13 Oct 2026; the defaults now reflect it (an unedited August agency
 profile is upgraded automatically on boot — an edited one is left alone):

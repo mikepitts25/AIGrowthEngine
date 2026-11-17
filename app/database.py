@@ -86,38 +86,31 @@ DEFAULT_PROFILE = {
     ],
 }
 
-# Agency mode: Colibri Code runs the Overnight Front Office for home service businesses.
+# Agency mode: Colibri Code runs the Booked-Job Desk for home service businesses.
 # Seeded from the sales materials in the AImoney course repo — edit in Settings.
 DEFAULT_AGENCY_PROFILE = {
     "agency_name": "Colibri Code LLC",
     "website": "",
     "service": (
-        "The Overnight Front Office for home-service contractors. Every call, text and "
-        "AI-caller inquiry from 5pm to 7am is answered - by the shop's existing AI "
-        "receptionist (Jobber, Housecall Pro, Zoom, Quo), which we configure and run, or by "
-        "ours - and a bilingual human reads, corrects, tags and escalates every overnight "
-        "conversation, then sends the owner a sorted Morning Board (book today / call back / "
-        "quote sent / spam) before 7am Pacific. Spanish-speaking customers get a call back "
-        "from a person. Google discontinued Business Profile call history in 2026, so the "
-        "board is the owner's record. Includes calendar write-back, follow-up texts, review "
-        "requests, Business Profile facts kept current for Google's AI caller, and the A2P "
-        "and AI-disclosure compliance."
+        "The Booked-Job Desk for home-service contractors: we turn the customers and "
+        "estimates a shop already has into booked jobs. Seasonal win-back campaigns to "
+        "customers who haven't booked in 12+ months, a weekly follow-up on open estimates, "
+        "and review requests after every job - drafted with AI, reviewed by a bilingual person "
+        "(English/Spanish), approved by the owner, and sent from the shop's OWN Jobber or "
+        "Housecall Pro account. Results are counted in the shop's own job board. Add-ons on "
+        "request: after-hours front office (we run their AI receptionist) and speed-to-lead."
     ),
     "pricing": (
-        "Front Office Bundle: $2,500 setup + $1,000/month launch ($1,200 once we have a case "
-        "study); Scale $1,500+/month adds Spanish callbacks and quarterly reactivation; 7-day "
-        "paid pilot $250, credited to setup. Compare against a hire, never against software: "
-        "a night/weekend CSR is $3,300-4,600/month fully loaded, a human answering service "
-        "$300-1,500/month and it only takes messages."
+        "Free Dormant-Customer Count (15-min screenshare). Reactivation Pilot: $0 up front, "
+        "$75 per booked job (counted in their job board within 30 days). Booked-Job Desk: "
+        "$400/month + $40 per booked job, capped at $1,500, month-to-month, no setup fee."
     ),
-    "founders": "Mike (build + sales) & Paola (client ops, Morning Board, bilingual callbacks)",
+    "founders": "Mike (build + sales) & Paola (client ops, campaign review, Spanish)",
     "tone": (
-        "confident, plain-spoken, evidence-first. Lead with what happens to THEIR calls after "
-        "5pm - the timestamp and recording of our own after-hours test call beats any "
-        "statistic. NEVER open with 'AI' or 'never miss a call': every $15-29 tool says it and "
-        "it anchors us at their price. If they already have an AI receptionist, say 'keep it, "
-        "we run it'. Concede the cheap option openly, then explain what it does not do: nobody "
-        "reads its conversations before the owner is up."
+        "confident, plain-spoken, owner-to-owner. Lead with THEIR dormant customers and open "
+        "estimates - their own numbers - never with 'AI'. Stress that they approve every "
+        "message, it sends from their own account, and they only pay per job booked in their "
+        "own job board. Never invent statistics, response rates or client results."
     ),
     "verticals": ["hvac", "plumber", "roofer", "electrician"],
     # Working window 17:00-23:00 CET = 08:00-14:00 PT, and Mountain/Pacific is where
@@ -142,6 +135,19 @@ _AUG_2026_SERVICE = (
         "and escalates every overnight conversation before the owner wakes up. "
         "Books into their real calendar (Jobber/Housecall Pro), handles follow-up, "
         "and we own the A2P registration and AI-disclosure compliance."
+)
+# Fingerprint of the Oct-2026 default (Overnight Front Office), upgraded the same way.
+_OCT_2026_SERVICE = (
+        "The Overnight Front Office for home-service contractors. Every call, text and "
+        "AI-caller inquiry from 5pm to 7am is answered - by the shop's existing AI "
+        "receptionist (Jobber, Housecall Pro, Zoom, Quo), which we configure and run, or by "
+        "ours - and a bilingual human reads, corrects, tags and escalates every overnight "
+        "conversation, then sends the owner a sorted Morning Board (book today / call back / "
+        "quote sent / spam) before 7am Pacific. Spanish-speaking customers get a call back "
+        "from a person. Google discontinued Business Profile call history in 2026, so the "
+        "board is the owner's record. Includes calendar write-back, follow-up texts, review "
+        "requests, Business Profile facts kept current for Google's AI caller, and the A2P "
+        "and AI-disclosure compliance."
 )
 _PROFILE_UPGRADE_FIELDS = ("service", "pricing", "tone", "founders")
 
@@ -190,7 +196,7 @@ def init_db():
             )
         else:
             stored = json.loads(row["value"])
-            if stored.get("service") == _AUG_2026_SERVICE:
+            if stored.get("service") in (_AUG_2026_SERVICE, _OCT_2026_SERVICE):
                 stored.update({k: DEFAULT_AGENCY_PROFILE[k] for k in _PROFILE_UPGRADE_FIELDS})
                 db.execute("UPDATE settings SET value = ? WHERE key = 'agency_profile'",
                            (json.dumps(stored),))

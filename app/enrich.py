@@ -113,8 +113,8 @@ def enrich_lead(lead: dict) -> dict | None:
         if probe.get("fsm") == "ServiceTitan":
             reasons.append("runs ServiceTitan — often a $3M+ shop with CSRs; qualify size before pitching")
         elif probe.get("fsm"):
-            score += 5
-            reasons.append(f"runs {probe['fsm']} — may already have its AI receptionist: pitch 'keep it, we run it and review it overnight'")
+            score += 15
+            reasons.append(f"runs {probe['fsm']} — customer export and campaigns ready: strong Booked-Job Desk lead")
         if probe["emails"] and not email:
             email = probe["emails"][0]
             reasons.append(f"email found on site: {email}")

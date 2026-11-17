@@ -98,7 +98,9 @@ def score_business(*, phone: str, website: str, hours: str,
       * a website is now a POSITIVE (a real business with a real front door),
         where the old model rewarded its absence
       * the review band moved up (30-400) to proxy $1M-3M rather than sub-$750K
-      * after-hours gaps still score, because that is what the Morning Board sells
+      * Nov 2026: the core offer is the Booked-Job Desk (win-back campaigns to the
+        shop's own customers), so customer-base size matters most; after-hours gaps
+        only hint at the add-on and score lightly
     """
     score, reasons = 0, []
 
@@ -120,17 +122,17 @@ def score_business(*, phone: str, website: str, hours: str,
         reasons.append("no listed hours")
     else:
         if not _covers_weekend(hours):
-            score += 15
-            reasons.append("closed weekends - emergency calls go unanswered (Morning Board value)")
+            score += 5
+            reasons.append("closed weekends (add-on signal: after-hours)")
         if not _covers_evening(hours):
-            score += 15
-            reasons.append("closes before 6pm - after-hours calls unanswered (Morning Board value)")
+            score += 5
+            reasons.append("closes before 6pm (add-on signal: after-hours)")
 
     # Review count as a revenue proxy. 30-400 brackets the $1M-3M target band.
     if review_count is not None:
         if 30 <= review_count <= 400:
             score += 30
-            reasons.append(f"{review_count} reviews - fits the $1M-3M target band")
+            reasons.append(f"{review_count} reviews - fits the $1M-3M target band (years of past customers to win back)")
         elif 10 <= review_count < 30:
             score += 10
             reasons.append(f"{review_count} reviews - possibly under target size, qualify on the call")

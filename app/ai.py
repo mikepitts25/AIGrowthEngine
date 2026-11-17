@@ -94,12 +94,13 @@ def qualify_lead(agency_profile: dict, lead: dict) -> dict | None:
     text = llm.complete(
         system=(
             "You qualify sales leads for a small AI agency. Score how good a fit "
-            "each business is for the service (0-100), where high fit = a real "
-            "service business at $1M-3M revenue whose evenings and weekends land on voicemail, "
-            "a human answering service, or an AI receptionist nobody reviews (Jobber, Housecall "
-            "Pro, Zoom, Quo) - already owning an AI tool is NOT a negative, we run it. Low fit: "
-            "shops with a night CSR they are happy with. Supply houses, wholesalers, franchises with call "
-            "centers, and non-service businesses are low fit. Be blunt.\n\n"
+            "each business is for the service (0-100), where high fit = an owner-run "
+            "service business at $1M-3M revenue with years of past customers (30-400 Google "
+            "reviews is a good proxy) that runs Jobber or Housecall Pro - i.e. it has a customer "
+            "list and open estimates we can work, and an office that can book the replies. Low "
+            "fit: brand-new shops (no customer base), ServiceTitan-size operations with their own "
+            "marketing team, supply houses, wholesalers, franchises with call "
+            "centers, and non-service businesses. Be blunt.\n\n"
             + _agency_context(agency_profile)
         ),
         user=(
@@ -130,40 +131,34 @@ def qualify_lead(agency_profile: dict, lead: dict) -> dict | None:
 
 AGENCY_CHANNEL_SPECS = {
     "email": (
-        "a cold email: subject line on the first line as 'Subject: …', then a 90-130 word body. "
-        "Open with what happens to their calls after 5pm (a specific observation about their own "
-        "line beats any statistic - NEVER missed-call stats, every $29 tool uses those). Then the "
-        "Overnight Front Office in one plain sentence: answered all night by their AI or ours, a "
-        "bilingual person reads every conversation and hands the owner a sorted board before 7am. "
-        "Mention Google dropped Business Profile call history, so the board is their record. "
-        "Anchor price against a night CSR ($3,300-4,600/mo loaded), never against software. "
-        "CTA: a 20-minute look at a sample morning board"
+        "a cold email: subject line on the first line as 'Subject: …', then a 70-110 word body. "
+        "Open with their dormant customers (people who haven't booked in a year), not with AI. "
+        "Offer: a short seasonal note sent from THEIR own Jobber/Housecall Pro account, which "
+        "they approve word for word, in English and Spanish, and they pay $75 per booked job, "
+        "nothing up front, counted from their own job board. CTA: a 15-minute screenshare to "
+        "count their dormant customers. Never invent statistics, response rates or client results"
     ),
     "sms": (
-        "a first-touch SMS, max 320 characters: who you are, one observation about their after-hours "
-        "line, and the morning board in a few words (a person checks every overnight call and sends "
-        "a sorted list before 7am, on the phone system they already have). End with an easy yes/no "
-        "question. No links, no pressure, never lead with 'AI'"
+        "a first-touch SMS to the OWNER (a business, not a consumer), max 300 characters: who "
+        "you are, the dormant-customer idea in one line, '$75 per booked job, nothing up front', "
+        "and an easy yes/no question about counting them together. No links, never lead with 'AI'"
     ),
     "callprep": (
-        "a cold-call prep sheet in plain text with these sections: LEAD SNAPSHOT (their details and "
-        "the signals we spotted), OPENING (word-for-word, ~10 seconds, lead with the timestamp of our "
-        "after-hours test call: 'I called your line at [time] and wanted to tell you what happened'), "
-        "WHAT HAPPENED (three branches: voicemail / their AI picked up / an answering service picked "
-        "up - each ends on 'who reads that in the morning?'), OFFER (a bilingual person reads every "
-        "overnight conversation, fixes what the AI got wrong, calls Spanish speakers back, and sends "
-        "a sorted board before 7am - on their AI or ours), LIKELY OBJECTIONS (4 with word-for-word "
-        "responses: not interested / 'Jobber already does this for $29' -> keep it, we run it / cost "
-        "-> compare to a night CSR / don't trust AI -> that's why a person checks every one), and "
-        "CLOSE (two-option scheduling ask for a 20-minute look at a sample board)"
+        "a cold-call prep sheet in plain text with these sections: LEAD SNAPSHOT (their details "
+        "and signals), OPENING (word-for-word, ~10 seconds: 'how many customers do you think "
+        "you've got who haven't booked in the last year?'), OFFER (seasonal note from their own "
+        "account, they approve it, $75 per booked job, nothing up front, counted in their job "
+        "board), SEASONAL ANGLE (the right campaign for this month and trade), LIKELY OBJECTIONS "
+        "(4 with word-for-word answers: 'we already send emails' / 'I don't want to spam my "
+        "customers' / 'what's the catch' / 'how do you know who booked because of you'), and "
+        "CLOSE (two-option ask for a 15-minute Dormant-Customer Count screenshare)"
     ),
     "sequence": (
-        "a 3-email follow-up sequence in plain text, clearly labeled 'EMAIL 1 — Day 0', "
-        "'EMAIL 2 — Day 3', 'EMAIL 3 — Day 7', each with its own Subject: line. "
-        "Email 1: what happens to their after-hours calls + the morning board + soft ask. "
-        "Email 2: short - Google stopped keeping Business Profile call history, so the board is "
-        "their record; offer the $250 paid 7-day pilot. Email 3: brief, warm break-up - door stays "
-        "open, one-line recap. Never guilt-trip, never invent client results or statistics"
+        "a 3-email sequence in plain text, labeled 'EMAIL 1 — Day 0', 'EMAIL 2 — Day 4', "
+        "'EMAIL 3 — Day 10', each with its own Subject: line. Email 1: dormant customers + the "
+        "pay-per-booked-job offer + 15-min count. Email 2: short, this season's campaign idea "
+        "for their trade. Email 3: brief, warm break-up ('reply count if you ever want the "
+        "number'). Never guilt-trip, never invent results or statistics"
     ),
 }
 
@@ -194,10 +189,36 @@ def _lead_gaps(lead: dict) -> list[str]:
     # "pitch ...", "qualify size ...") aren't customer-facing gaps — don't
     # quote them in outreach.
     internal = ("cold-callable", "pitch", "qualify", "deprioritise", "check they",
-                "target band", "email found")
+                "target band", "email found", "add-on signal", "Booked-Job Desk lead")
     # Strip internal value tags like "(Morning Board value)" from what's left.
     return [re.sub(r"\s*\([^)]*value\)$", "", r) for r in reasons
             if not any(k in r for k in internal)]
+
+
+_SEASONS = {
+    "hvac": {11: "furnace safety checks before the first cold snap", 12: "maintenance-plan renewals before year end",
+             1: "uneven heating and plan renewals", 2: "uneven heating and plan renewals",
+             3: "AC tune-ups before the spring rush", 4: "AC tune-ups before the spring rush",
+             5: "beat the first heatwave", 6: "beat the first heatwave", 7: "'running but not cooling?' repairs",
+             8: "'running but not cooling?' repairs", 9: "furnace tune-ups before the cold", 10: "furnace tune-ups before the cold"},
+}
+_DEFAULT_SEASON = {11: "water heater flushes and pipe-freeze prep", 12: "water heater flushes and pipe-freeze prep",
+                   1: "frozen-pipe follow-ups and panel checks", 2: "sump pump tests and panel checks",
+                   3: "spring plumbing and outdoor-outlet checks", 4: "spring plumbing and outdoor-outlet checks",
+                   5: "surge protection before storm season", 6: "surge protection before storm season",
+                   7: "water heater age checks", 8: "generator and water heater checks",
+                   9: "winterisation", 10: "winterisation and whole-home inspections"}
+
+
+def _month_name() -> str:
+    import datetime
+    return datetime.date.today().strftime("%B")
+
+
+def _seasonal_angle(vertical: str) -> str:
+    import datetime
+    m = datetime.date.today().month
+    return _SEASONS.get(vertical, _DEFAULT_SEASON).get(m, _DEFAULT_SEASON[m])
 
 
 def draft_agency_outreach(profile: dict, lead: dict, channel: str) -> tuple[str, str]:
@@ -212,14 +233,14 @@ def draft_agency_outreach(profile: dict, lead: dict, channel: str) -> tuple[str,
 
     text = llm.complete(
         system=(
-            "You write sales outreach for a two-person agency that runs the Overnight Front "
-            "Office for home service businesses (HVAC, plumbing, roofing…): calls after 5pm are "
-            "answered by the shop's existing AI receptionist or ours, and a bilingual human reads "
-            "every overnight conversation and sends the owner a sorted Morning Board before 7am. "
-            "Rules: plain-spoken and specific, never hypey; never lead with 'AI' or 'never miss a "
-            "call'; if they already have an AI receptionist, we run it - never ask them to switch; "
-            "price against a night CSR, not software; never invent statistics or client results. "
-            "Sound like a fellow small-business owner, not a marketer.\n\n"
+            "You write B2B sales outreach for a two-person agency that runs the Booked-Job "
+            "Desk for home service businesses (HVAC, plumbing, electrical, roofing): win-back "
+            "campaigns to the shop's own dormant customers, follow-up on open estimates and review "
+            "requests, sent from the shop's own Jobber/Housecall Pro, approved by the owner, paid "
+            "per booked job. Rules: plain-spoken and specific, never hypey; never lead with 'AI'; "
+            "the money is in customers they already have; 'booked' is counted in THEIR job board; "
+            "never invent statistics, response rates or client results. Sound like a fellow "
+            "small-business owner, not a marketer.\n\n"
             + _agency_context(profile)
         ),
         user=(
@@ -231,26 +252,27 @@ def draft_agency_outreach(profile: dict, lead: dict, channel: str) -> tuple[str,
             f"Phone: {lead.get('phone') or 'unknown'}\n"
             f"Website: {lead.get('website') or 'NONE'}\n"
             f"Details: {lead.get('snippet', '')}\n"
-            f"Pain signals we detected: {'; '.join(gaps) or 'none detected'}"
+            f"Signals we noticed: {'; '.join(gaps) or 'none'}\n"
+            f"Current month: {_month_name()} (pick the seasonal campaign for this trade)"
         ),
         max_tokens=1500,
     )
     if text:
         return text, "ai"
 
-    # Template fallbacks — modeled on the Colibri Code sales materials (Oct 2026).
+    # Template fallbacks — modeled on the Colibri Code sales materials, Part A (Nov 2026).
     name = profile.get("agency_name", "our agency")
     founders = profile.get("founders", "")
     first = founders.split("(")[0].split("&")[0].strip() or "Mike"
-    gap_line = f" (I noticed: {gaps[0]}.)" if gaps else ""
-    board = ("a person reads every overnight call and text, fixes what the AI got wrong, "
-             "calls Spanish-speaking customers back, and sends you a sorted list before 7am")
+    season = _seasonal_angle(vertical)
+    offer = ("a short seasonal note from your own account, which you approve word for word, "
+             "and you pay $75 per job it books, nothing up front, counted in your own job board")
 
     if channel == "sms":
         content = (
-            f"Hi, this is {first} with {name}. We run the overnight front desk for {trade} shops "
-            f"in {city}: a person checks every call and text after 5pm and sends the owner a "
-            f"sorted list before 7am. Works on the phone system you already have. Worth seeing a sample morning?"
+            f"Hi, {first} with {name}. Most {trade} shops in {city} have hundreds of past customers "
+            f"who haven't booked in a year. We win them back for you: $75 per booked job, nothing "
+            f"up front. Want to count yours together in 15 min?"
         )
     elif channel == "callprep":
         rating_line = ""
@@ -266,66 +288,56 @@ def draft_agency_outreach(profile: dict, lead: dict, channel: str) -> tuple[str,
             f"Phone: {lead.get('phone') or 'find via Google Business Profile'}\n"
             f"Website: {lead.get('website') or 'NONE'}\n"
             f"{rating_line}"
-            f"Signals: {'; '.join(gaps) or 'check the after-hours Live Test log before dialing'}\n\n"
-            f"OPENING (10s): \"Hey [first name], it's {first} with {name}. I'll be quick — I called "
-            f"your line at [TIME from the Live Test] and wanted to tell you what happened. Got thirty "
-            f"seconds?\"\n\n"
-            f"WHAT HAPPENED (pick one):\n"
-            f"- Voicemail → \"It went to voicemail — normal for shops your size after five. Google "
-            f"stopped keeping your call history this year, so who listens to those in the morning?\"\n"
-            f"- Their AI answered → \"Your AI picked up and took a message. Who reads what it did "
-            f"overnight before your guys head out?\"\n"
-            f"- Answering service → \"A service took my number. Do you get a sorted list in the "
-            f"morning, or a pile of texts? Who calls the Spanish speakers back?\"\n\n"
-            f"OFFER: \"Whatever answers your phone at night — yours or ours — {board}.\"\n\n"
+            f"Signals: {'; '.join(gaps) or 'check reviews count (customer base) before dialing'}\n\n"
+            f"OPENING (10s): \"Hey [first name], it's {first} with {name}. Quick one — how many "
+            f"customers do you think you've got in Jobber who haven't booked anything in the "
+            f"last year?\"\n\n"
+            f"OFFER: \"That's usually the cheapest work a shop can get. We send them {offer}.\"\n\n"
+            f"SEASONAL ANGLE: {season}\n\n"
             f"OBJECTIONS:\n"
-            f"- \"Not interested\" → \"Fair. When you get in tomorrow, how will you know who "
-            f"called tonight?\"\n"
-            f"- \"Jobber/Zoom already does this for $29\" → \"Keep it. I'm not asking you to switch "
-            f"— we run it and a person checks everything it did overnight.\"\n"
-            f"- \"How much?\" → \"Less than a part-time night CSR, and those run $3,300-4,600 "
-            f"a month loaded. Let me show you the board first.\"\n"
-            f"- \"Don't trust AI\" → \"Neither do I, completely — that's why a person checks "
-            f"every conversation.\"\n\n"
-            f"CLOSE: \"Tuesday or Thursday for a 20-minute look at a sample morning board?\""
+            f"- \"We already send emails\" → \"When did the last one go to people who haven't "
+            f"booked in a year? Most shops have the tool and no time. We're the time.\"\n"
+            f"- \"Don't want to spam customers\" → \"One short note, in your voice, you approve "
+            f"it first, unsubscribe on every email. If you don't like it, it doesn't go.\"\n"
+            f"- \"What's the catch?\" → \"We only get paid on jobs in your own board within 30 "
+            f"days. You check our count; disputed rows are yours.\"\n"
+            f"- \"How do you know it was you?\" → \"We match new jobs against the list we sent, "
+            f"and anyone already scheduled is excluded up front.\"\n\n"
+            f"CLOSE: \"Could we count them together on a 15-minute screenshare — Tuesday or "
+            f"Thursday?\""
         )
     elif channel == "sequence":
         content = (
             f"EMAIL 1 — Day 0\n"
-            f"Subject: Who called {business} last night?\n\n"
+            f"Subject: Your customers from last year\n\n"
             f"Hi there,\n\n"
-            f"I work with {trade} companies in {city}. Most of them don't have a clean answer to "
-            f"one question: who called after five, and did anyone get back to them?{gap_line}\n\n"
-            f"We run the overnight front desk: whatever answers your phone at night — your AI or "
-            f"ours — {board}.\n\n"
-            f"Worth 20 minutes to see a sample morning?\n\n"
+            f"Most {trade} shops in {city} have hundreds of customers who haven't booked in a "
+            f"year — the cheapest work there is, because they already know you. We send them "
+            f"{offer}.\n\n"
+            f"Worth 15 minutes to count yours?\n\n"
             f"{first}, {name}\n\n"
             f"{'—' * 30}\n\n"
-            f"EMAIL 2 — Day 3\n"
-            f"Subject: Your call history is gone\n\n"
-            f"Quick one — Google discontinued Business Profile call history this year. If evenings "
-            f"go to voicemail or an app, the only record of who called is whoever listens in the "
-            f"morning.\n\n"
-            f"If you'd rather see it than hear about it, there's a 7-day paid pilot ($250, credited "
-            f"to setup). Want me to send it over?\n\n"
+            f"EMAIL 2 — Day 4\n"
+            f"Subject: The campaign that works this time of year\n\n"
+            f"Quick one — for {trade} shops right now it's: {season}. Happy to count your dormant "
+            f"customers on a 15-min screenshare and show you the draft.\n\n"
             f"{first}, {name}\n\n"
             f"{'—' * 30}\n\n"
-            f"EMAIL 3 — Day 7\n"
+            f"EMAIL 3 — Day 10\n"
             f"Subject: Closing the loop\n\n"
-            f"Hi — I'll take the silence as 'not right now', which is completely fine. If evenings "
-            f"ever become a headache, just reply. Wishing you a packed schedule.\n\n"
+            f"I'll leave it here. If you ever want to know how many past customers you're sitting "
+            f"on, reply 'count' and I'll set it up.\n\n"
             f"{first}, {name}"
         )
     else:  # email
         content = (
-            f"Subject: Who called {business} last night?\n\n"
+            f"Subject: Your customers from last year\n\n"
             f"Hi there,\n\n"
-            f"I work with {trade} companies in {city}, and most owners I talk to can't say for sure "
-            f"who called after five — or whether anyone got back to them.{gap_line}\n\n"
-            f"We run the overnight front desk: whatever answers your phone at night — your AI "
-            f"receptionist or ours — {board}. Google stopped keeping Business Profile call history "
-            f"this year, so that list becomes your record.\n\n"
-            f"It costs a fraction of a night CSR. Worth 20 minutes to see a sample morning?\n\n"
+            f"Most {trade} shops in {city} have hundreds of customers in Jobber or Housecall Pro "
+            f"who haven't booked in a year — the cheapest work there is, because they already "
+            f"know you.\n\n"
+            f"We send them {offer}. English and Spanish.\n\n"
+            f"Worth 15 minutes to count yours?\n\n"
             f"{first}\n{name}"
         )
     return content, "template"
